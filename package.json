@@ -9,7 +9,12 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@auth/core": "^0.34.3",
+    "@google/generative-ai": "^0.24.1",
+    "convex": "^1.31.7",
+    "convex-helpers": "^0.1.111",
     "next": "16.1.6",
+    "openai": "^6.17.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

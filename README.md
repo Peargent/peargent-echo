@@ -1,36 +1,176 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Peargent Echo 🧠
 
-## Getting Started
+> Intelligent memory layer for AI agents. Give your agents persistent, semantic memory.
 
-First, run the development server:
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Status](https://img.shields.io/badge/status-beta-yellow.svg)
+
+## Features
+
+- 🔍 **Semantic Search** - Find memories by meaning, not just keywords
+- 🧠 **Auto-Extraction** - Automatically extract entities and facts using LLM
+- ⏰ **Smart Forgetting** - Memories decay naturally over time
+- 🔑 **Simple API** - RESTful API with easy integration
+- 👥 **Multi-Agent** - Scope memories by agent, user, or session
+- 📊 **Usage Tracking** - Monitor your API usage and credits
+
+## Quick Start
+
+### 1. Install the SDK (coming soon)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pip install peargent-echo
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Use in your code
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```python
+from peargent_echo import Echo
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Initialize with your API key
+echo = Echo(api_key="echo_sk_...")
 
-## Learn More
+# Store a memory
+echo.add("User prefers dark mode and likes Python")
 
-To learn more about Next.js, take a look at the following resources:
+# Search semantically
+results = echo.search("What are the user's preferences?")
+print(results[0].content)
+# → "User prefers dark mode and likes Python"
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API Reference
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Add Memory
 
-## Deploy on Vercel
+```bash
+curl -X POST https://your-domain.com/api/v1/memories \
+  -H "Authorization: Bearer echo_sk_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "User prefers dark mode",
+    "agentId": "assistant-1",
+    "metadata": {"source": "user-preferences"}
+  }'
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Search Memories
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+curl -X POST https://your-domain.com/api/v1/search \
+  -H "Authorization: Bearer echo_sk_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What are user preferences?",
+    "limit": 10
+  }'
+```
+
+### List Memories
+
+```bash
+curl https://your-domain.com/api/v1/memories \
+  -H "Authorization: Bearer echo_sk_YOUR_KEY"
+```
+
+## Development
+
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+- Convex account
+- OpenAI API key
+
+### Setup
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/peargent-echo.git
+cd peargent-echo
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Set up Convex:
+```bash
+npx convex dev --once --configure=new
+```
+
+4. Add your OpenAI API key to Convex:
+```bash
+npx convex env set OPENAI_API_KEY sk-your-key
+```
+
+5. Start the development server:
+```bash
+npm run dev
+```
+
+The app will be available at `http://localhost:3000`.
+
+### Project Structure
+
+```
+peargent-echo/
+├── convex/                 # Backend (Convex)
+│   ├── schema.ts          # Database schema
+│   ├── memories.ts        # Memory CRUD + search
+│   ├── auth.ts            # Authentication
+│   ├── keys.ts            # API key management
+│   ├── credits.ts         # Credit system
+│   ├── maintenance.ts     # Scheduled jobs
+│   └── lib/
+│       ├── embeddings.ts  # OpenAI integration
+│       └── crypto.ts      # Hashing utilities
+│
+├── src/
+│   ├── app/
+│   │   ├── page.tsx       # Landing page
+│   │   ├── login/         # Login page
+│   │   ├── signup/        # Signup page
+│   │   ├── dashboard/     # Dashboard pages
+│   │   └── api/v1/        # Public API routes
+│   └── components/        # React components
+```
+
+## Credit Costs
+
+| Operation | Credits |
+|-----------|---------|
+| Add memory | 1 |
+| Search | 1 |
+| Update | 1 |
+| Get/List | Free |
+| Delete | Free |
+
+New accounts start with **100 free credits**.
+
+## Deployment
+
+### Deploy to Vercel
+
+1. Push your code to GitHub
+2. Connect to Vercel
+3. Set environment variables:
+   - `NEXT_PUBLIC_CONVEX_URL` (from Convex dashboard)
+4. Deploy!
+
+### Deploy Convex to Production
+
+```bash
+npx convex deploy
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Support
+
+- 📧 Email: support@peargent.com
+- 💬 Discord: [Join our community](https://discord.gg/peargent)
+- 📖 Docs: [docs.peargent.com](https://docs.peargent.com)
