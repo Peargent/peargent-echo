@@ -14,13 +14,24 @@ export default defineSchema({
     // OAuth fields
     emailVerified: v.optional(v.number()),
     emailVerificationTime: v.optional(v.number()), // Google OAuth sends this
-    credits: v.optional(v.number()),
     tokensProcessed: v.optional(v.number()),
     searchesMade: v.optional(v.number()),
     memoriesStored: v.optional(v.number()),
     createdAt: v.optional(v.number()),
+    // Billing fields
+    plan: v.optional(v.string()), // "free" | "pro" | "enterprise"
+    dodoCustomerId: v.optional(v.string()),
+    subscriptionStatus: v.optional(v.string()), // "active" | "cancelled" | "on_hold"
+    subscriptionId: v.optional(v.string()),
+    currentPeriodEnd: v.optional(v.number()),
+    credits: v.optional(v.number()),
+    
+    // Bonus allowance from coupons
+    extraMemories: v.optional(v.number()),
+    extraSearches: v.optional(v.number()),
   })
-    .index("email", ["email"]),  // Named 'email' for Convex Auth compatibility
+    .index("email", ["email"])
+    .index("by_dodo_customer", ["dodoCustomerId"]),
 
   // API Keys for external access
   apiKeys: defineTable({
@@ -102,7 +113,7 @@ export default defineSchema({
     userId: v.id("users"),
     apiKeyId: v.optional(v.id("apiKeys")),
     operation: v.string(), // add, search, delete, etc.
-    creditsUsed: v.number(),
+    creditsUsed: v.optional(v.number()), // Legacy field
     metadata: v.optional(v.any()), // Request details
     createdAt: v.number(),
   })
@@ -127,4 +138,24 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"]),
+
+  // Coupons for bonus memories/searches
+  coupons: defineTable({
+    code: v.string(),           // e.g. "SUMMER2026"
+    memories: v.number(),       // Bonus memories to grant
+    searches: v.number(),       // Bonus searches to grant
+    maxUses: v.number(),        // Total global redemptions allowed (Infinity for unlimited)
+    usedCount: v.number(),      // Current global redemptions
+    expiresAt: v.optional(v.number()),
+    isActive: v.boolean(),
+  })
+    .index("by_code", ["code"]),
+
+  // Track user redemptions to prevent double usage
+  couponRedemptions: defineTable({
+    userId: v.id("users"),
+    couponId: v.id("coupons"),
+    redeemedAt: v.number(),
+  })
+    .index("by_user_coupon", ["userId", "couponId"]),
 });

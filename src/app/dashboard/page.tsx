@@ -21,8 +21,20 @@ export default function DashboardPage() {
     const oauthUser = useQuery(api.auth.getOAuthUser, isOAuthAuthenticated ? {} : "skip");
     const user = token ? emailPasswordUser : oauthUser;
 
-    // Get Analytics Data (Fetch 365 days to match Usage page for cache sharing)
     const analytics = useQuery(api.analytics.getDashboardStats, user ? { days: 365 } : "skip");
+
+    // Fetch plan limits
+    const planLimits = useQuery(api.users.getPlanLimits, user ? { userId: user._id } : "skip");
+
+    const memoryLimit = planLimits?.limits.memories ?? 1000;
+    const searchLimit = planLimits?.limits.searches ?? 1000;
+
+    // Helper to format large numbers
+    const formatLimit = (limit: number) => {
+        if (limit === Infinity) return "∞";
+        if (limit >= 1000) return `${(limit / 1000).toFixed(1)}K`;
+        return limit.toString();
+    };
 
     if (!user) {
         return <PageLoader />;
@@ -87,7 +99,7 @@ export default function DashboardPage() {
                                 <span className="text-xs font-medium tracking-widest uppercase text-foreground-muted mb-2 block">Retrievals (This Month)</span>
                                 <div className="flex items-baseline gap-2">
                                     <span className="text-4xl lg:text-5xl font-light">{analytics?.userInfo?.currentMonthRetrievals?.toLocaleString() ?? 0}</span>
-                                    <span className="text-lg text-foreground-muted font-light">/ 1,000</span>
+                                    <span className="text-lg text-foreground-muted font-light">/ {formatLimit(searchLimit)}</span>
                                 </div>
                             </div>
                             <div className="w-12 h-12 rounded-full border border-border/40 flex items-center justify-center text-[#4ade80] group-hover:border-[#4ade80]/50 transition-colors">
@@ -106,7 +118,7 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="mt-4">
                                     <span className="text-3xl font-light">{analytics?.userInfo?.memoriesStored?.toLocaleString() ?? user.memoriesStored ?? 0}</span>
-                                    <span className="text-sm text-foreground-muted font-light ml-2">/ 1,000</span>
+                                    <span className="text-sm text-foreground-muted font-light ml-2">/ {formatLimit(memoryLimit)}</span>
                                 </div>
                             </Link>
                             <Link href="/dashboard/keys" className="p-8 flex flex-col justify-between hover:bg-secondary/5 transition-colors group">
@@ -172,7 +184,7 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="text-sm font-medium group-hover:text-[#4ade80] transition-colors">Create API Key</div>
                             </Link>
-                            <Link href="/docs" className="flex items-center gap-4 group cursor-pointer p-4 border border-border/40 rounded-lg hover:bg-secondary/5 transition-colors opacity-80 hover:opacity-100">
+                            <Link href="/dashboard/docs" className="flex items-center gap-4 group cursor-pointer p-4 border border-border/40 rounded-lg hover:bg-secondary/5 transition-colors opacity-80 hover:opacity-100">
                                 <div className="text-foreground-muted group-hover:text-blue-400 transition-colors">
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />

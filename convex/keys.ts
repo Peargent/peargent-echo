@@ -9,7 +9,6 @@ interface ApiKeyValidationResult {
   userId: Id<"users">;
   apiKeyId: Id<"apiKeys">;
   permissions: string[];
-  credits: number;
 }
 
 /**
@@ -161,7 +160,6 @@ export const findApiKeyByHash = internalQuery({
       userId: user._id,
       apiKeyId: apiKeyRecord._id,
       permissions: apiKeyRecord.permissions,
-      credits: user.credits ?? 0,
     };
   },
 });

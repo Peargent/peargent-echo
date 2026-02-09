@@ -10,7 +10,6 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [GitHub, Google],
 });
 
-const INITIAL_CREDITS = 100;
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 /**
@@ -34,7 +33,6 @@ export const getOAuthUser = query({
       email: user.email,
       name: user.name,
       image: user.image,
-      credits: user.credits ?? INITIAL_CREDITS,
       tokensProcessed: user.tokensProcessed ?? 0,
       searchesMade: user.searchesMade ?? 0,
       memoriesStored: user.memoriesStored ?? 0,
@@ -71,9 +69,9 @@ export const signUp = mutation({
       email: args.email.toLowerCase(),
       name: args.name,
       passwordHash,
-      credits: INITIAL_CREDITS,
       tokensProcessed: 0,
       searchesMade: 0,
+      memoriesStored: 0,
       createdAt: Date.now(),
     });
 

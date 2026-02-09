@@ -94,7 +94,6 @@ export const getDashboardStats = query({
 
     return {
         userInfo: {
-            credits: user.credits || 0,
             memoriesStored: user.memoriesStored || 0,
             tokensProcessed: user.tokensProcessed || 0,
             searchesMade: (await ctx.db.query("usageLogs").withIndex("by_user", q => q.eq("userId", user._id)).filter(q => q.eq(q.field("operation"), "search")).collect()).length,

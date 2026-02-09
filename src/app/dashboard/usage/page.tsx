@@ -70,9 +70,6 @@ export default function UsagePage() {
                         Analytics & Logs
                     </h1>
                 </div>
-                <div className="pb-6 text-sm text-foreground-muted">
-                    Last 30 Days
-                </div>
             </header>
 
             {/* Main Content */}

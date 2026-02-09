@@ -827,7 +827,6 @@ export const logMemoryUsage = internalMutation({
     await ctx.db.insert("usageLogs", {
       userId: args.userId,
       operation: args.operation,
-      creditsUsed: 0,
       metadata: { ...args.metadata, tokens },
       createdAt: Date.now(),
     });

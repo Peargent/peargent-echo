@@ -87,23 +87,23 @@ export default function APIKeysPage() {
                         API Keys
                     </h1>
                 </div>
-                <div className="pb-4">
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="px-4 py-2 bg-[#4ade80] text-black text-xs font-medium uppercase tracking-wider hover:bg-[#4ade80]/90 transition-colors rounded-sm"
-                    >
-                        Create New Key
-                    </button>
-                </div>
             </header>
 
             {/* Main Content */}
             <div className="flex-1 overflow-auto relative z-10 p-10">
 
+                <div className="flex justify-between items-center mb-10">
+                    <h2 className="text-xl font-medium">Your API Keys</h2>
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="px-6 py-2.5 bg-[#4ade80] text-black text-xs font-bold uppercase tracking-wider hover:bg-[#4ade80]/90 transition-all rounded-sm shadow-sm hover:shadow-lg active:scale-95"
+                    >
+                        Create New Key
+                    </button>
+                </div>
 
                 {/* API Keys List */}
                 <div className="card bg-transparent border-0 p-0 shadow-none">
-                    <h2 className="text-lg font-medium mb-6">Your API Keys</h2>
 
                     {apiKeys === undefined ? (
                         <PageLoader />
