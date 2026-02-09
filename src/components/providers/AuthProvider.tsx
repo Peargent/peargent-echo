@@ -35,8 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
 
     const signUpMutation = useMutation(api.auth.signUp);
-    const signInMutation = useMutation(api.auth.signIn);
-    const signOutMutation = useMutation(api.auth.signOut);
+    const signInMutation = useMutation(api.auth.signInWithPassword);
+    const signOutMutation = useMutation(api.auth.signOutWithToken);
 
     // Load token from localStorage on mount
     useEffect(() => {
