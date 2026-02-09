@@ -2,183 +2,194 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/lib/convex";
 import Link from "next/link";
+import { VercelAreaChart } from "@/components/dashboard/charts";
 
 export default function DashboardPage() {
     const [token, setToken] = useState<string | null>(null);
+    const { isAuthenticated: isOAuthAuthenticated } = useConvexAuth();
 
     useEffect(() => {
         setToken(localStorage.getItem("peargent_echo_token"));
     }, []);
 
-    const user = useQuery(api.auth.getCurrentUser, token ? { token } : "skip");
+    // Get user from either auth method
+    const emailPasswordUser = useQuery(api.auth.getCurrentUser, token ? { token } : "skip");
+    const oauthUser = useQuery(api.auth.getOAuthUser, isOAuthAuthenticated ? {} : "skip");
+    const user = token ? emailPasswordUser : oauthUser;
+
+    // Get Analytics Data
+    const analytics = useQuery(api.analytics.getDashboardStats, user ? { days: 30 } : "skip");
 
     if (!user) {
         return (
-            <div className="p-8">
-                <div className="text-foreground-muted">Loading...</div>
+            <div className="h-full flex items-center justify-center">
+                <div className="text-foreground-muted text-sm">Loading...</div>
             </div>
         );
     }
 
+    // Extract recent 7 days for mini charts
+    // Extract recent 7 days for mini charts
+    const recentHistory = analytics?.history.slice(-7) || [];
+
+    // Format data for Vercel Charts ({ value, label })
+    const formatData = (data: any[], key: string) => {
+        // If no data, return empty structure for last 7 days mockup
+        if (!data.length) {
+            return Array.from({ length: 7 }).map((_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() - (6 - i));
+                return {
+                    label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                    value: 0
+                };
+            });
+        }
+        return data.map(d => ({
+            label: new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            value: d[key]
+        }));
+    };
+
+    const memoryChartData = formatData(recentHistory, 'memories');
+
     return (
-        <div className="p-8">
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold mb-2">Welcome back{user.name ? `, ${user.name}` : ""}!</h1>
-                <p className="text-foreground-muted">Here&apos;s an overview of your memory usage.</p>
-            </div>
+        <div className="min-h-full flex flex-col bg-background font-sans">
+            {/* Grid Background */}
+            <div className="absolute inset-0 pointer-events-none z-0 grid-lines opacity-[0.03]" />
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <StatCard
-                    title="Credits Remaining"
-                    value={user.credits.toString()}
-                    icon="credits"
-                    color="primary"
-                />
-                <StatCard
-                    title="Total Memories"
-                    value="—"
-                    icon="memories"
-                    color="success"
-                    subtitle="View memories →"
-                    href="/dashboard/memories"
-                />
-                <StatCard
-                    title="API Keys"
-                    value="—"
-                    icon="keys"
-                    color="warning"
-                    subtitle="Manage keys →"
-                    href="/dashboard/keys"
-                />
-            </div>
-
-            {/* Quick Actions */}
-            <div className="card mb-8">
-                <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Link
-                        href="/dashboard/keys"
-                        className="flex items-center gap-4 p-4 rounded-lg bg-secondary hover:bg-border transition-colors"
-                    >
-                        <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                        </div>
-                        <div>
-                            <p className="font-medium">Create API Key</p>
-                            <p className="text-sm text-foreground-muted">Generate a new key for your application</p>
-                        </div>
-                    </Link>
-                    <Link
-                        href="/docs"
-                        className="flex items-center gap-4 p-4 rounded-lg bg-secondary hover:bg-border transition-colors"
-                    >
-                        <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <p className="font-medium">View Documentation</p>
-                            <p className="text-sm text-foreground-muted">Learn how to integrate Echo</p>
-                        </div>
-                    </Link>
+            {/* Header Area - Clean & Minimal */}
+            <header className="h-20 px-8 flex items-end justify-between border-b border-border/40 relative z-10">
+                <div className="pb-6">
+                    <h1 className="text-sm font-medium tracking-widest uppercase opacity-70">
+                        Overview
+                    </h1>
                 </div>
-            </div>
+            </header>
 
-            {/* API Example */}
-            <div className="card">
-                <h2 className="text-lg font-semibold mb-4">Quick Start</h2>
-                <div className="bg-background rounded-lg p-4 overflow-x-auto">
-                    <pre className="text-sm">
-                        <code className="text-foreground-muted">
-                            {`# Install the SDK
-pip install peargent-echo
+            {/* Main Content - Veltrix Grid Style */}
+            <div className="flex-1 overflow-auto relative z-10">
 
-# Use in your code
-from peargent_echo import Echo
+                {/* Welcome Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 border-b border-border/40">
+                    <div className="p-10 lg:p-14 border-r border-border/40">
+                        <h2 className="text-5xl lg:text-7xl font-semibold tracking-tight leading-[0.9] mb-6">
+                            Hello <span className="text-stroke">{user.name ? user.name.split(" ")[0] : "User"}</span>
+                        </h2>
+                        <p className="text-xl text-foreground-muted max-w-md leading-relaxed">
+                            Your memory bank is active. <span className="text-[#4ade80]">Ready to recall.</span>
+                        </p>
+                    </div>
 
-echo = Echo(api_key="your_api_key_here")
+                    {/* Primary Stats - Integrated into grid */}
+                    <div className="grid grid-rows-2">
+                        <div className="p-8 border-b border-border/40 flex items-center justify-between hover:bg-secondary/5 transition-colors group">
+                            <div>
+                                <span className="text-xs font-medium tracking-widest uppercase text-foreground-muted mb-2 block">Retrievals (This Month)</span>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-4xl lg:text-5xl font-light">{analytics?.userInfo?.currentMonthRetrievals?.toLocaleString() ?? 0}</span>
+                                    <span className="text-lg text-foreground-muted font-light">/ 1,000</span>
+                                </div>
+                            </div>
+                            <div className="w-12 h-12 rounded-full border border-border/40 flex items-center justify-center text-[#4ade80] group-hover:border-[#4ade80]/50 transition-colors">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2">
+                            <Link href="/dashboard/memories" className="p-8 border-r border-border/40 flex flex-col justify-between hover:bg-secondary/5 transition-colors group">
+                                <div className="flex justify-between items-start">
+                                    <span className="text-xs font-medium tracking-widest uppercase text-foreground-muted">Total Memories</span>
+                                    <svg className="w-4 h-4 text-foreground-muted group-hover:text-foreground transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                    </svg>
+                                </div>
+                                <div className="mt-4">
+                                    <span className="text-3xl font-light">{analytics?.userInfo?.memoriesStored?.toLocaleString() ?? user.memoriesStored ?? 0}</span>
+                                    <span className="text-sm text-foreground-muted font-light ml-2">/ 1,000</span>
+                                </div>
+                            </Link>
+                            <Link href="/dashboard/keys" className="p-8 flex flex-col justify-between hover:bg-secondary/5 transition-colors group">
+                                <div className="flex justify-between items-start">
+                                    <span className="text-xs font-medium tracking-widest uppercase text-foreground-muted">Active Keys</span>
+                                    <svg className="w-4 h-4 text-foreground-muted group-hover:text-foreground transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                    </svg>
+                                </div>
+                                <span className="text-3xl font-light mt-4">{analytics?.userInfo?.activeKeys ?? 0}</span>
+                            </Link>
+                        </div>
+                    </div>
+                </div>
 
-# Add a memory
-echo.add("User prefers dark mode")
+                {/* Secondary Section - Actions */}
+                {/* Memory Analytics */}
+                <div className="border-b border-border/40">
+                    <div className="p-10">
+                        <Link href="/dashboard/memories" className="block">
+                            <h3 className="text-lg font-medium mb-8 flex items-center gap-2 group">
+                                Memory Growth
+                                <span className="text-xs text-foreground-muted opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-wider">View All Memories &rarr;</span>
+                            </h3>
+                        </Link>
+                        <div className="flex flex-col h-96 bg-secondary/5 border border-border/40 rounded-sm p-6 relative group overflow-hidden">
+                            <div className="absolute inset-0 pointer-events-none z-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-400 to-transparent" />
+                            <div className="flex items-center justify-between mb-6 relative z-10">
+                                <div>
+                                    <p className="text-xs font-medium tracking-widest uppercase text-foreground-muted mb-1">Memories Stored (7 Days)</p>
+                                    <p className="text-3xl font-light">{analytics?.userInfo?.memoriesStored?.toLocaleString() ?? user.memoriesStored ?? 0}</p>
+                                </div>
+                                <div className="text-purple-400">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div className="flex-1 w-full relative z-10">
+                                <VercelAreaChart
+                                    data={memoryChartData}
+                                    color="#c084fc"
+                                    id="memories-chart"
+                                    height="100%"
+                                    showXAxis={true}
+                                    showYAxis={false}
+                                    showGrid={false}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-# Search memories
-results = echo.search("What are user preferences?")`}
-                        </code>
-                    </pre>
+                {/* Quick Actions - Compact */}
+                <div className="border-b border-border/40">
+                    <div className="p-10 py-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Link href="/dashboard/keys" className="flex items-center gap-4 group cursor-pointer p-4 border border-border/40 rounded-lg hover:bg-secondary/5 transition-colors opacity-80 hover:opacity-100">
+                                <div className="text-foreground-muted group-hover:text-[#4ade80] transition-colors">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                    </svg>
+                                </div>
+                                <div className="text-sm font-medium group-hover:text-[#4ade80] transition-colors">Create API Key</div>
+                            </Link>
+                            <Link href="/docs" className="flex items-center gap-4 group cursor-pointer p-4 border border-border/40 rounded-lg hover:bg-secondary/5 transition-colors opacity-80 hover:opacity-100">
+                                <div className="text-foreground-muted group-hover:text-blue-400 transition-colors">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                    </svg>
+                                </div>
+                                <div className="text-sm font-medium group-hover:text-blue-400 transition-colors">Documentation</div>
+                            </Link>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     );
 }
 
-function StatCard({
-    title,
-    value,
-    icon,
-    color,
-    subtitle,
-    href,
-}: {
-    title: string;
-    value: string;
-    icon: string;
-    color: "primary" | "success" | "warning" | "error";
-    subtitle?: string;
-    href?: string;
-}) {
-    const colorClasses = {
-        primary: "bg-primary/20 text-primary",
-        success: "bg-success/20 text-success",
-        warning: "bg-warning/20 text-warning",
-        error: "bg-error/20 text-error",
-    };
 
-    const content = (
-        <div className="card hover:border-primary/50 transition-colors">
-            <div className="flex items-start justify-between mb-4">
-                <div className={`w-10 h-10 rounded-lg ${colorClasses[color]} flex items-center justify-center`}>
-                    <StatIcon name={icon} />
-                </div>
-            </div>
-            <p className="text-3xl font-bold mb-1">{value}</p>
-            <p className="text-sm text-foreground-muted">{title}</p>
-            {subtitle && (
-                <p className="text-xs text-primary mt-2">{subtitle}</p>
-            )}
-        </div>
-    );
-
-    if (href) {
-        return <Link href={href}>{content}</Link>;
-    }
-
-    return content;
-}
-
-function StatIcon({ name }: { name: string }) {
-    const icons: Record<string, React.ReactNode> = {
-        credits: (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-        ),
-        memories: (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-        ),
-        keys: (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-            </svg>
-        ),
-    };
-
-    return <>{icons[name] || null}</>;
-}

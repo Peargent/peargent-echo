@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/lib/convex";
 import { Navbar } from "@/components/Navbar";
 
 export default function SignupPage() {
     const router = useRouter();
+    const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -20,6 +22,13 @@ export default function SignupPage() {
 
     const signUp = useMutation(api.auth.signUp);
     const { signIn: signInWithOAuth } = useAuthActions();
+
+    // Redirect to dashboard if already authenticated via OAuth
+    useEffect(() => {
+        if (!authLoading && isAuthenticated) {
+            router.push("/dashboard");
+        }
+    }, [isAuthenticated, authLoading, router]);
 
     // Email/password signup
     const handleSubmit = async (e: React.FormEvent) => {
@@ -49,12 +58,12 @@ export default function SignupPage() {
         }
     };
 
-    // OAuth sign in/up
+    // OAuth sign in/up - redirects to provider, then back to SITE_URL
     const handleOAuthSignIn = async (provider: "github" | "google") => {
         setOauthLoading(provider);
         setError("");
         try {
-            await signInWithOAuth(provider);
+            await signInWithOAuth(provider, { redirectTo: "/dashboard" });
         } catch (err) {
             setError(err instanceof Error ? err.message : `Failed to sign up with ${provider}`);
             setOauthLoading(null);

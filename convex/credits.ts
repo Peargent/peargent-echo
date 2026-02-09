@@ -26,10 +26,11 @@ export const checkCreditsInternal = internalQuery({
     }
 
     const cost = CREDIT_COSTS[args.operation as keyof typeof CREDIT_COSTS] || 0;
+    const userCredits = user.credits ?? 0;
     return {
-      hasEnough: user.credits >= cost,
+      hasEnough: userCredits >= cost,
       required: cost,
-      available: user.credits,
+      available: userCredits,
     };
   },
 });
@@ -52,13 +53,14 @@ export const deductCreditsInternal = internalMutation({
 
     const cost = CREDIT_COSTS[args.operation as keyof typeof CREDIT_COSTS] || 0;
 
-    if (user.credits < cost) {
+    const userCredits = user.credits ?? 0;
+    if (userCredits < cost) {
       throw new Error("Insufficient credits");
     }
 
     // Deduct credits
     await ctx.db.patch(args.userId, {
-      credits: user.credits - cost,
+      credits: userCredits - cost,
     });
 
     // Log usage
@@ -71,6 +73,6 @@ export const deductCreditsInternal = internalMutation({
       createdAt: Date.now(),
     });
 
-    return { creditsRemaining: user.credits - cost };
+    return { creditsRemaining: userCredits - cost };
   },
 });

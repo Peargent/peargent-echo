@@ -13,10 +13,14 @@ export default defineSchema({
     passwordHash: v.optional(v.string()), // For email/password auth
     // OAuth fields
     emailVerified: v.optional(v.number()),
+    emailVerificationTime: v.optional(v.number()), // Google OAuth sends this
     credits: v.optional(v.number()),
+    tokensProcessed: v.optional(v.number()),
+    searchesMade: v.optional(v.number()),
+    memoriesStored: v.optional(v.number()),
     createdAt: v.optional(v.number()),
   })
-    .index("by_email", ["email"]),
+    .index("email", ["email"]),  // Named 'email' for Convex Auth compatibility
 
   // API Keys for external access
   apiKeys: defineTable({
@@ -38,7 +42,8 @@ export default defineSchema({
     runId: v.optional(v.string()), // Scope by run/session
 
     content: v.string(), // Raw content
-    embedding: v.array(v.float64()), // Vector embedding (1536 dims)
+    embedding: v.optional(v.array(v.float64())), // Legacy field, keeping for schema validation until migration
+    // embedding field moved to 'embeddings' table
 
     // Extracted metadata
     entities: v.array(
@@ -64,11 +69,20 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_agent", ["userId", "agentId"])
     .index("by_user_run", ["userId", "runId"])
-    .index("by_user_created", ["userId", "createdAt"])
+    .index("by_user_created", ["userId", "createdAt"]),
+
+  // Separate Embeddings Table for optimization
+  embeddings: defineTable({
+    userId: v.id("users"),
+    memoryId: v.id("memories"),
+    agentId: v.optional(v.string()),
+    embedding: v.array(v.float64()),
+  })
+    .index("by_memory", ["memoryId"])
     .vectorIndex("by_embedding", {
-      vectorField: "embedding",
-      dimensions: 768,
-      filterFields: ["userId", "agentId"],
+        vectorField: "embedding",
+        dimensions: 1024,
+        filterFields: ["userId", "agentId"], 
     }),
 
   // Memory relationships (graph)

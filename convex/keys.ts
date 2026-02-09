@@ -161,7 +161,7 @@ export const findApiKeyByHash = internalQuery({
       userId: user._id,
       apiKeyId: apiKeyRecord._id,
       permissions: apiKeyRecord.permissions,
-      credits: user.credits,
+      credits: user.credits ?? 0,
     };
   },
 });

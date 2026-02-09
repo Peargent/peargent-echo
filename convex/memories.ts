@@ -1,11 +1,12 @@
-import { action, mutation, query, internalMutation, internalQuery } from "./_generated/server";
+import { action, mutation, query, internalMutation, internalQuery, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { 
   generateEmbedding, 
   extractMemoryInfo, 
   classifyMemory,
-  findMemoryRelationships 
+  findMemoryRelationships,
+  analyzeMemoryIntegration
 } from "./lib/embeddings";
 import { Doc, Id } from "./_generated/dataModel";
 
@@ -24,7 +25,7 @@ interface RankedMemory extends MemoryWithScore {
 // Type for add memory result
 interface AddMemoryResult {
   id?: Id<"memories">;
-  action: "created" | "merged" | "filtered" | "error";
+  action: "created" | "merged" | "filtered" | "error" | "updated" | "ignored";
   message: string;
   filterReason?: string;
   profileUpdated?: boolean;
@@ -46,14 +47,16 @@ export const addMemory = action({
     updateProfile: v.optional(v.boolean()), // Whether to update user profile
   },
   handler: async (ctx, args): Promise<AddMemoryResult> => {
-    // Check credits first
-    const creditCheck = await ctx.runQuery(internal.credits.checkCreditsInternal, {
+    const MEMORY_LIMIT = 100;
+
+    // Check memory limit
+    const canAdd = await ctx.runQuery(internal.memories.checkMemoryLimit, {
       userId: args.userId,
-      operation: "add",
+      limit: MEMORY_LIMIT,
     });
 
-    if (!creditCheck.hasEnough) {
-      throw new Error(`Insufficient credits. Required: ${creditCheck.required}, Available: ${creditCheck.available}`);
+    if (!canAdd) {
+      throw new Error(`Memory limit reached (${MEMORY_LIMIT}). Please upgrade to add more memories.`);
     }
 
     // Smart filtering (if enabled)
@@ -69,48 +72,82 @@ export const addMemory = action({
       }
     }
 
-    // Generate embedding
+    // Generate embedding first to find similar
     const embedding = await generateEmbedding(args.content);
 
-    // Extract entities and facts if requested
-    let entities: Array<{ name: string; type: string }> = [];
-    let facts: string[] = [];
-    let importance = 0.5;
-
-    if (args.extract !== false) {
-      try {
-        const extracted = await extractMemoryInfo(args.content);
-        entities = extracted.entities;
-        facts = extracted.facts;
-        importance = extracted.importance;
-      } catch (error) {
-        console.error("Failed to extract memory info:", error);
-      }
-    }
-
-    // Check for similar memories (potential duplicates)
-    const similar: Doc<"memories"> | null = await ctx.runQuery(internal.memories.findSimilarInternal, {
-      userId: args.userId,
-      embedding,
-      threshold: SIMILARITY_THRESHOLD,
-      agentId: args.agentId,
+    // Check for similar memories (potential duplicates/updates)
+    // We check this BEFORE extraction to save tokens if we Ignore/Update
+    // Check for similar memories (potential duplicates/updates)
+    // We check this BEFORE extraction to save tokens if we Ignore/Update
+    // Vector search on EMBEDDINGS table
+    const results = await ctx.vectorSearch("embeddings", "by_embedding", {
+      vector: embedding,
+      limit: 1,
+      filter: (q) => q.eq("userId", args.userId),
     });
 
-    let memoryId: Id<"memories">;
-    let actionType: "created" | "merged" = "created";
+    let similar: Doc<"memories"> | null = null;
+    if (results.length > 0 && results[0]._score >= 0.85) {
+       // Get the embedding doc to find the reference
+       // We need to fetch the memory doc. Since we are in an action, we use the helper query.
+       const memories = await ctx.runQuery(internal.memories.getMemoriesFromEmbeddingIds, {
+          embeddingIds: [results[0]._id],
+          scores: [results[0]._score]
+       });
+       if (memories.length > 0) {
+           similar = memories[0];
+       }
+    }
 
+    let memoryId: Id<"memories"> | undefined;
+    let actionType: "created" | "merged" | "updated" | "ignored" = "created";
+    let finalReason: string = "";
+
+    // If we have a similar memory, use LLM to decide what to do
     if (similar) {
-      // Update existing memory instead of creating duplicate
-      await ctx.runMutation(internal.memories.mergeMemory, {
-        memoryId: similar._id,
-        newContent: args.content,
-        newFacts: facts,
-        newEntities: entities,
-      });
-      memoryId = similar._id;
-      actionType = "merged";
-    } else {
-      // Create new memory
+       const decision = await analyzeMemoryIntegration(args.content, similar.content);
+       
+       if (decision.action === "ignore") {
+          return {
+             action: "filtered",
+             message: "Memory ignored: Duplicate or redundant information.",
+             filterReason: "Redundant with existing memory: " + similar._id,
+          };
+       } else if (decision.action === "update" || decision.action === "merge") {
+          // Update the existing memory with refined content
+          const newContent = decision.refinedContent || args.content; // Fallback
+          
+          await ctx.runMutation(internal.memories.updateMemoryContent, {
+             memoryId: similar._id,
+             newContent: newContent,
+             newEmbedding: decision.action === "update" ? await generateEmbedding(newContent) : undefined // Re-embed if content changed significantly
+          });
+          
+          memoryId = similar._id;
+          actionType = decision.action === "update" ? "updated" : "merged";
+          finalReason = decision.reason;
+       } 
+       // If decision is "add", we fall through to creation
+    }
+
+    // Creating new memory (if not handled above)
+    if (!memoryId) {
+        // Extract entities and facts IF we are creating new
+        let entities: Array<{ name: string; type: string }> = [];
+        let facts: string[] = [];
+        let importance = 0.5;
+
+        if (args.extract !== false) {
+            try {
+                const extracted = await extractMemoryInfo(args.content);
+                entities = extracted.entities;
+                facts = extracted.facts;
+                importance = extracted.importance;
+            } catch (error) {
+                console.error("Failed to extract memory info:", error);
+            }
+        }
+
       memoryId = await ctx.runMutation(internal.memories.insertMemory, {
         userId: args.userId,
         content: args.content,
@@ -124,8 +161,13 @@ export const addMemory = action({
         metadata: args.metadata,
       });
 
-      // Find and create relationships with existing memories
-      const recentMemories = await ctx.runQuery(internal.memories.getRecentMemories, {
+      // Increment memory count usage
+      await ctx.runMutation(internal.memories.incrementMemoryCount, {
+        userId: args.userId,
+      });
+
+      // Find relationships
+       const recentMemories = await ctx.runQuery(internal.memories.getRecentMemories, {
         userId: args.userId,
         limit: 10,
         excludeId: memoryId,
@@ -134,13 +176,13 @@ export const addMemory = action({
       if (recentMemories.length > 0) {
         const relationships = await findMemoryRelationships(
           args.content,
-          recentMemories.map(m => ({ id: m._id, content: m.content }))
+          recentMemories.map((m: Doc<"memories">) => ({ id: m._id, content: m.content }))
         );
 
         for (const rel of relationships) {
           await ctx.runMutation(internal.memories.createRelationship, {
             userId: args.userId,
-            fromMemoryId: memoryId,
+            fromMemoryId: memoryId!,
             toMemoryId: rel.memoryId as Id<"memories">,
             type: rel.type,
             strength: rel.strength,
@@ -187,10 +229,14 @@ export const addMemory = action({
       }
     }
 
-    // Deduct credits
-    await ctx.runMutation(internal.credits.deductCreditsInternal, {
+    // Log usage with estimated tokens (approx 4 chars per token for input + output)
+    const estimatedTokens = Math.ceil(args.content.length / 4);
+    
+    await ctx.runMutation(internal.memories.logMemoryUsage, {
       userId: args.userId,
       operation: "add",
+      metadata: { action: actionType, memoryId },
+      tokens: estimatedTokens,
     });
 
     return { 
@@ -255,21 +301,21 @@ export const searchMemories = action({
     // Vector search
     const limit = args.limit || 10;
     
-    const results = await ctx.vectorSearch("memories", "by_embedding", {
+    // Vector search on EMBEDDINGS table
+    const results = await ctx.vectorSearch("embeddings", "by_embedding", {
       vector: queryEmbedding,
       limit: Math.min(limit * 2, 50),
       filter: (q) => q.eq("userId", args.userId),
     });
 
-    // Get full memory documents
-    const memories: (MemoryWithScore | null)[] = await Promise.all(
-      results.map(async (result): Promise<MemoryWithScore | null> => {
-        const memory: Doc<"memories"> | null = await ctx.runQuery(internal.memories.getMemoryById, {
-          memoryId: result._id,
-        });
-        return memory ? { ...memory, _score: result._score } : null;
-      })
-    );
+    // Get full memory documents using memoryId from embeddings
+    // We cannot use ctx.db in an action, so we use a helper query
+    const resultsWithScore = results.map(r => ({ id: r._id, score: r._score }));
+    
+    const memories: (MemoryWithScore | null)[] = await ctx.runQuery(internal.memories.getMemoriesFromEmbeddingIds, {
+      embeddingIds: results.map(r => r._id),
+      scores: results.map(r => r._score),
+    });
 
     // Filter nulls and apply custom ranking
     const rankedMemories: RankedMemory[] = memories
@@ -298,7 +344,17 @@ export const searchMemories = action({
       });
     }
 
-    // Deduct credits
+    // Log search usage
+    const estimatedTokens = Math.ceil(args.query.length / 4);
+    
+    await ctx.runMutation(internal.memories.logMemoryUsage, {
+      userId: args.userId,
+      operation: "search",
+      metadata: { queryLength: args.query.length },
+      tokens: estimatedTokens,
+    });
+
+    // Deduct credits (if utilizing credit system)
     await ctx.runMutation(internal.credits.deductCreditsInternal, {
       userId: args.userId,
       operation: "search",
@@ -315,7 +371,7 @@ export const searchMemories = action({
           });
 
           relatedMemories = await Promise.all(
-            relationships.map(async (rel) => {
+            relationships.map(async (rel: Doc<"relationships">) => {
               const relatedId = rel.fromMemoryId === m._id ? rel.toMemoryId : rel.fromMemoryId;
               const relatedMemory = await ctx.runQuery(internal.memories.getMemoryById, {
                 memoryId: relatedId,
@@ -367,8 +423,7 @@ export const getMemory = query({
       return null;
     }
 
-    const { embedding, ...rest } = memory;
-    return rest;
+    return memory;
   },
 });
 
@@ -394,8 +449,7 @@ export const listMemories = query({
 
     const hasMore = memories.length > limit;
     const items = memories.slice(0, limit).map((m) => {
-      const { embedding, ...rest } = m;
-      return rest;
+        return m;
     });
 
     return {
@@ -467,6 +521,17 @@ export const deleteMemory = mutation({
 
     for (const rel of [...fromRelations, ...toRelations]) {
       await ctx.db.delete(rel._id);
+      await ctx.db.delete(rel._id);
+    }
+
+    // Delete embedding
+    const embeddings = await ctx.db
+        .query("embeddings")
+        .withIndex("by_memory", (q) => q.eq("memoryId", args.memoryId))
+        .collect();
+    
+    for (const emb of embeddings) {
+        await ctx.db.delete(emb._id);
     }
 
     await ctx.db.delete(args.memoryId);
@@ -492,10 +557,10 @@ export const insertMemory = internalMutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args): Promise<Id<"memories">> => {
-    return await ctx.db.insert("memories", {
+    const memoryId = await ctx.db.insert("memories", {
       userId: args.userId,
       content: args.content,
-      embedding: args.embedding,
+      // embedding stored separately
       entities: args.entities,
       facts: args.facts,
       importance: args.importance,
@@ -508,6 +573,16 @@ export const insertMemory = internalMutation({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
+
+    // Store embedding in separate table
+    await ctx.db.insert("embeddings", {
+        userId: args.userId,
+        memoryId: memoryId,
+        agentId: args.agentId,
+        embedding: args.embedding,
+    });
+
+    return memoryId;
   },
 });
 
@@ -518,9 +593,67 @@ export const findSimilarInternal = internalQuery({
     threshold: v.number(),
     agentId: v.optional(v.string()),
   },
-  handler: async (_ctx, _args): Promise<Doc<"memories"> | null> => {
-    // Simplified - in production use vectorSearch
+  handler: async (ctx, args): Promise<Doc<"memories"> | null> => {
+    // Deprecated: Logic moved to action
     return null;
+  },
+});
+
+export const updateMemoryContent = internalMutation({
+    args: {
+        memoryId: v.id("memories"),
+        newContent: v.string(),
+        newEmbedding: v.optional(v.array(v.float64()))
+    },
+    handler: async (ctx, args) => {
+        const updates: any = {
+            content: args.newContent,
+            updatedAt: Date.now()
+        };
+        if (args.newEmbedding) {
+            // Update embedding in separate table
+            const embeddings = await ctx.db
+                .query("embeddings")
+                .withIndex("by_memory", (q) => q.eq("memoryId", args.memoryId))
+                .first();
+            
+            if (embeddings) {
+                await ctx.db.patch(embeddings._id, { embedding: args.newEmbedding });
+            } else {
+                 // Should not happen, but create if missing
+                 const memory = await ctx.db.get(args.memoryId);
+                 if (memory) {
+                    await ctx.db.insert("embeddings", {
+                        userId: memory.userId,
+                        memoryId: args.memoryId,
+                        agentId: memory.agentId,
+                        embedding: args.newEmbedding
+                    });
+                 }
+            }
+        }
+        await ctx.db.patch(args.memoryId, updates);
+    }
+});
+
+export const getMemoriesFromEmbeddingIds = internalQuery({
+  args: {
+    embeddingIds: v.array(v.id("embeddings")),
+    scores: v.array(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const memories = await Promise.all(
+      args.embeddingIds.map(async (id, index) => {
+        const embeddingDoc = await ctx.db.get(id);
+        if (!embeddingDoc) return null;
+        
+        const memory = await ctx.db.get(embeddingDoc.memoryId);
+        if (!memory) return null;
+
+        return { ...memory, _score: args.scores[index] };
+      })
+    );
+    return memories;
   },
 });
 
@@ -639,3 +772,180 @@ function calculateRecencyScore(createdAt: number): number {
   const ageHours = ageMs / (1000 * 60 * 60);
   return Math.exp(-ageHours / 24);
 }
+
+export const checkMemoryLimit = internalQuery({
+  args: {
+    userId: v.id("users"),
+    limit: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return false;
+    return (user.memoriesStored ?? 0) < args.limit;
+  },
+});
+
+export const incrementMemoryCount = internalMutation({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (user) {
+      await ctx.db.patch(args.userId, {
+        memoriesStored: (user.memoriesStored ?? 0) + 1,
+      });
+    }
+  },
+});
+
+export const logMemoryUsage = internalMutation({
+  args: {
+    userId: v.id("users"),
+    operation: v.string(),
+    metadata: v.optional(v.any()),
+    tokens: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const tokens = args.tokens ?? 0;
+    
+    await ctx.db.insert("usageLogs", {
+      userId: args.userId,
+      operation: args.operation,
+      creditsUsed: 0,
+      metadata: { ...args.metadata, tokens },
+      createdAt: Date.now(),
+    });
+
+    const user = await ctx.db.get(args.userId);
+    if (user) {
+      const updates: any = {
+        tokensProcessed: (user.tokensProcessed ?? 0) + tokens,
+      };
+
+      if (args.operation === "search") {
+        updates.searchesMade = (user.searchesMade ?? 0) + 1;
+      }
+
+      await ctx.db.patch(args.userId, updates);
+    }
+  },
+});
+
+/**
+ * Migration helper: Update a memory's embedding
+ */
+export const updateMemoryEmbedding = internalMutation({
+    args: {
+      memoryId: v.id("memories"),
+      embedding: v.array(v.float64()),
+    },
+    handler: async (ctx, args) => {
+      // Find existing embedding record
+      const embeddingDoc = await ctx.db
+        .query("embeddings")
+        .withIndex("by_memory", (q) => q.eq("memoryId", args.memoryId))
+        .first();
+
+       if (embeddingDoc) {
+          await ctx.db.patch(embeddingDoc._id, { embedding: args.embedding });
+       } else {
+           // Migration support: create if missing
+           const memory = await ctx.db.get(args.memoryId);
+           if (memory) {
+               await ctx.db.insert("embeddings", {
+                   userId: memory.userId,
+                   memoryId: args.memoryId,
+                   agentId: memory.agentId,
+                   embedding: args.embedding
+               });
+           }
+       }
+    },
+  });
+
+/**
+ * Helper query to list all memories for migration
+ */
+export const listAllMemoriesInternal = internalQuery({
+  args: {
+    cursor: v.optional(v.string()),
+    limit: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("memories")
+      .order("desc")
+      .paginate({ cursor: args.cursor ?? null, numItems: args.limit });
+
+    return {
+      items: result.page,
+      continueCursor: result.continueCursor,
+      isDone: result.isDone,
+    };
+  },
+});
+
+/**
+ * Migration Action: Re-embed all memories (paginated)
+ */
+export const reEmbedAllMemories = internalAction({
+  args: {
+    cursor: v.optional(v.string()),
+    batchSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<{ processed: number; continueCursor: string | null; isDone: boolean }> => {
+    const batchSize = args.batchSize ?? 10;
+    
+    // Fetch a batch of memories
+    const result: { items: Doc<"memories">[]; continueCursor: string; isDone: boolean } = await ctx.runQuery(internal.memories.listAllMemoriesInternal, {
+      cursor: args.cursor,
+      limit: batchSize,
+    });
+
+    let processed = 0;
+    
+    for (const memory of result.items) {
+      try {
+        console.log(`Re-embedding memory ${memory._id}...`);
+        const newEmbedding = await generateEmbedding(memory.content);
+        
+        await ctx.runMutation(internal.memories.updateMemoryEmbedding, {
+          memoryId: memory._id,
+          embedding: newEmbedding,
+        });
+        processed++;
+      } catch (error) {
+        console.error(`Failed to re-embed memory ${memory._id}:`, error);
+      }
+    }
+
+    // Recursively schedule next batch if not done
+    if (!result.isDone) {
+      console.log(`Scheduling next batch (cursor: ${result.continueCursor})...`);
+      await ctx.scheduler.runAfter(0, internal.memories.reEmbedAllMemories, {
+        cursor: result.continueCursor,
+        batchSize,
+      });
+    } else {
+      console.log("Migration complete!");
+    }
+
+    return {
+      processed,
+      continueCursor: result.continueCursor ?? null,
+      isDone: result.isDone,
+    };
+  },
+});
+
+/**
+ * Public action to trigger the migration (Run this once)
+ */
+export const triggerMigration = action({
+  args: {},
+  handler: async (ctx) => {
+    await ctx.scheduler.runAfter(0, internal.memories.reEmbedAllMemories, {});
+    return "Migration started! Check your logs in the Convex dashboard.";
+  },
+});

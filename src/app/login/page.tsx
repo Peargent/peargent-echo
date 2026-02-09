@@ -1,23 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useConvexAuth } from "convex/react";
 import { api } from "@/lib/convex";
 import { Navbar } from "@/components/Navbar";
 
 export default function LoginPage() {
     const router = useRouter();
+    const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<string | null>(null);
 
-    const signIn = useMutation(api.auth.signIn);
+    const signInWithPassword = useMutation(api.auth.signInWithPassword);
     const { signIn: signInWithOAuth } = useAuthActions();
+
+    // Redirect to dashboard if already authenticated via OAuth
+    useEffect(() => {
+        if (!authLoading && isAuthenticated) {
+            router.push("/dashboard");
+        }
+    }, [isAuthenticated, authLoading, router]);
 
     // Email/password sign in
     const handleSubmit = async (e: React.FormEvent) => {
@@ -26,7 +35,7 @@ export default function LoginPage() {
         setIsLoading(true);
 
         try {
-            const result = await signIn({ email, password });
+            const result = await signInWithPassword({ email, password });
             localStorage.setItem("peargent_echo_token", result.token);
             router.push("/dashboard");
         } catch (err) {
@@ -36,12 +45,12 @@ export default function LoginPage() {
         }
     };
 
-    // OAuth sign in
+    // OAuth sign in - redirects to provider, then back to SITE_URL  
     const handleOAuthSignIn = async (provider: "github" | "google") => {
         setOauthLoading(provider);
         setError("");
         try {
-            await signInWithOAuth(provider);
+            await signInWithOAuth(provider, { redirectTo: "/dashboard" });
         } catch (err) {
             setError(err instanceof Error ? err.message : `Failed to sign in with ${provider}`);
             setOauthLoading(null);

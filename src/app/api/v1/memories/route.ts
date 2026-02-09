@@ -109,12 +109,12 @@ export async function POST(request: NextRequest) {
         profileUpdated: result.profileUpdated,
       },
       message: result.message,
-      usage: { credits: 1 },
+      usage: { credits: 0 },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to add memory";
     
-    if (message.includes("Insufficient credits")) {
+    if (message.includes("Insufficient credits") || message.includes("Memory limit reached")) {
       return NextResponse.json(
         { error: "Payment Required", message },
         { status: 402 }

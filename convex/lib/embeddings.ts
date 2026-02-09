@@ -1,30 +1,35 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 
-// Lazy initialization of Gemini client
-let genAI: GoogleGenerativeAI | null = null;
+// Lazy initialization of OpenAI client for Cohere
+let openai: OpenAI | null = null;
 
-function getGeminiClient(): GoogleGenerativeAI {
-  if (!genAI) {
-    const apiKey = process.env.GEMINI_API_KEY;
+function getOpenAIClient(): OpenAI {
+  if (!openai) {
+    const apiKey = process.env.COHERE_API_KEY;
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY environment variable is not set");
+      throw new Error("COHERE_API_KEY environment variable is not set");
     }
-    genAI = new GoogleGenerativeAI(apiKey);
+    openai = new OpenAI({
+      apiKey: apiKey,
+      baseURL: "https://api.cohere.ai/compatibility/v1",
+    });
   }
-  return genAI;
+  return openai;
 }
 
 /**
- * Generate embedding for a text string using Gemini
+ * Generate embedding for a text string using Cohere via OpenAI SDK
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const client = getGeminiClient();
-  const model = client.getGenerativeModel({ model: "text-embedding-004" });
+  const client = getOpenAIClient();
   
-  const result = await model.embedContent(text);
-  const embedding = result.embedding.values;
+  const response = await client.embeddings.create({
+    model: "embed-english-v3.0",
+    input: text,
+    encoding_format: "float",
+  });
   
-  return embedding;
+  return response.data[0].embedding;
 }
 
 /**
@@ -39,48 +44,117 @@ export interface MemoryClassification {
 /**
  * Classify whether a memory should be stored
  */
+/**
+ * Classify whether a memory should be stored
+ */
 export async function classifyMemory(content: string): Promise<MemoryClassification> {
-  const client = getGeminiClient();
-  const model = client.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.1,
-    },
-  });
+  const client = getOpenAIClient();
+  
+  const prompt = `You are a strict Memory Gatekeeper for an AI assistant.
+Your goal is to decide if the user's input contains PERMANENT, VALUABLE information worth storing in long-term memory.
 
-  const prompt = `Classify this text for a persistent memory system.
+Input: "${content}"
 
-Categories:
-- "persistent": Important facts, preferences, personal info, skills, relationships that should be remembered long-term
-- "ephemeral": Temporary states (battery level, current mood, weather), transient info that will change soon
-- "irrelevant": Greetings, filler words, system messages, or meaningless content
+Rules:
+1. STORE ("persistent") ONLY if the input contains:
+   - Explicit user preferences ("I like dark mode")
+   - Personal facts ("My name is Tarun")
+   - Specific future plans/goals ("I want to learn Rust")
+   - Important constraints ("Don't use Tailwind")
+2. IGNORE ("irrelevant") if the input is:
+   - Casual chitchat ("Hello", "How are you", "Cool", "Thanks")
+   - Immediate/transient requests ("Write code for this", "Fix this bug")
+   - Questions without factual content ("What is the weather?")
+   - Temporary states ("I'm tired")
 
 Respond in JSON:
 {
-  "category": "persistent" | "ephemeral" | "irrelevant",
-  "reason": "brief explanation"
-}
-
-Text to classify:
-"${content}"`;
+  "category": "persistent" | "irrelevant",
+  "reason": "Short explanation",
+  "shouldStore": boolean
+}`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const parsed = JSON.parse(result.response.text());
+    const result = await client.chat.completions.create({
+      model: "command-r",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      response_format: { type: "json_object" },
+    });
+    
+    const text = result.choices[0].message.content || "{}";
+    const parsed = JSON.parse(text);
     return {
-      category: parsed.category || "persistent",
-      reason: parsed.reason || "",
+      category: parsed.category === "persistent" ? "persistent" : "irrelevant",
+      reason: parsed.reason || "AI decision",
       shouldStore: parsed.category === "persistent",
     };
-  } catch {
-    // Default to storing (fail open)
+  } catch (error) {
+    console.error("Classification failed, defaulting to store", error);
+    // Fail safe: Store it if we can't decide, better to have it than lose it
     return {
       category: "persistent",
-      reason: "Classification failed, defaulting to store",
+      reason: "Error in classification",
       shouldStore: true,
     };
   }
+}
+
+/**
+ * Analyze how to integrate new memory with existing similar memory
+ */
+export async function analyzeMemoryIntegration(
+  newContent: string,
+  existingContent: string
+): Promise<{
+    action: "add" | "update" | "merge" | "ignore";
+    reason: string;
+    refinedContent?: string; // The content to write (for update/merge)
+}> {
+    const client = getOpenAIClient();
+    
+    const prompt = `You are a Memory Manager.
+We have a NEW piece of information and an EXISTING memory that is semantically similar.
+Decide how to handle the new information to keep the memory bank minimal and accurate.
+
+Existing Memory: "${existingContent}"
+New Information: "${newContent}"
+
+Rules:
+1. IGNORE if the New Information is already fully contained in Existing Memory (Duplicate).
+2. UPDATE if the New Information CONTRADICTS or UPDATES the Existing Memory (e.g., "I moved to NY" updates "I live in SF").
+3. MERGE if the New Information adds NEW DETAILS to the Existing Memory without contradiction.
+4. ADD if the New Information is DISTINCT enough to be its own separate memory (rare, usually Merge).
+
+For UPDATE or MERGE, provide the "refinedContent" which is the concise, combined truth.
+
+Respond in JSON:
+{
+  "action": "add" | "update" | "merge" | "ignore",
+  "reason": "Explanation",
+  "refinedContent": "The final text to store (required for update/merge)"
+}`;
+
+    try {
+        const result = await client.chat.completions.create({
+            model: "command-r",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.1,
+            response_format: { type: "json_object" },
+        });
+
+        const text = result.choices[0].message.content || "{}";
+        const parsed = JSON.parse(text);
+        
+        return {
+            action: parsed.action || "add",
+            reason: parsed.reason || "AI decision",
+            refinedContent: parsed.refinedContent
+        };
+    } catch (error) {
+        console.error("Integration analysis failed", error);
+        return { action: "add", reason: "Error in analysis" };
+    }
 }
 
 /**
@@ -99,15 +173,8 @@ export async function extractProfileUpdate(
   existingStatic: string[],
   existingDynamic: string[]
 ): Promise<ProfileUpdate> {
-  const client = getGeminiClient();
-  const model = client.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.2,
-    },
-  });
-
+  const client = getOpenAIClient();
+  
   const prompt = `Extract user profile information from this text.
 
 Static facts are PERMANENT: name, age, profession, location, skills, preferences (e.g., "User is 20 years old", "Prefers dark mode")
@@ -135,13 +202,21 @@ Text to analyze:
 "${content}"`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const parsed = JSON.parse(result.response.text());
+    const result = await client.chat.completions.create({
+      model: "command-r",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+    });
+    
+    const text = result.choices[0].message.content || "{}";
+    const parsed = JSON.parse(text);
     return {
       staticFacts: parsed.staticFacts || [],
       dynamicContext: parsed.dynamicContext || [],
     };
-  } catch {
+  } catch (error) {
+    console.error("Profile extraction failed:", error);
     return {
       staticFacts: [],
       dynamicContext: [],
@@ -157,14 +232,7 @@ export async function extractMemoryInfo(content: string): Promise<{
   facts: string[];
   importance: number;
 }> {
-  const client = getGeminiClient();
-  const model = client.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.3,
-    },
-  });
+  const client = getOpenAIClient();
 
   const prompt = `Analyze the given text and extract:
 1. Entities: Important people, places, concepts, or things mentioned
@@ -181,17 +249,23 @@ Respond in this exact JSON format:
 Text to analyze:
 ${content}`;
 
-  const result = await model.generateContent(prompt);
-  const responseText = result.response.text();
-  
   try {
-    const parsed = JSON.parse(responseText);
+    const result = await client.chat.completions.create({
+      model: "command-r",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+    });
+    
+    const text = result.choices[0].message.content || "{}";
+    const parsed = JSON.parse(text);
     return {
       entities: parsed.entities || [],
       facts: parsed.facts || [],
       importance: Math.min(1, Math.max(0, parsed.importance || 0.5)),
     };
-  } catch {
+  } catch (error) {
+    console.error("Info extraction failed:", error);
     return {
       entities: [],
       facts: [],
@@ -209,14 +283,7 @@ export async function findMemoryRelationships(
 ): Promise<Array<{ memoryId: string; type: "extends" | "contradicts" | "relates_to"; strength: number }>> {
   if (existingMemories.length === 0) return [];
   
-  const client = getGeminiClient();
-  const model = client.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.2,
-    },
-  });
+  const client = getOpenAIClient();
 
   const memorySummary = existingMemories
     .slice(0, 10) // Limit to 10 for context length
@@ -247,8 +314,15 @@ For each related memory, respond in JSON:
 Only include memories with clear relationships. Use strength 0-1 (higher = stronger connection).`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const parsed = JSON.parse(result.response.text());
+    const result = await client.chat.completions.create({
+      model: "command-r",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+    });
+    
+    const text = result.choices[0].message.content || "{}";
+    const parsed = JSON.parse(text);
     
     return (parsed.relationships || [])
       .filter((r: { index: number }) => r.index >= 0 && r.index < existingMemories.length)
@@ -257,7 +331,8 @@ Only include memories with clear relationships. Use strength 0-1 (higher = stron
         type: r.type as "extends" | "contradicts" | "relates_to",
         strength: Math.min(1, Math.max(0, r.strength || 0.5)),
       }));
-  } catch {
+  } catch (error) {
+    console.error("Relationship finding failed:", error);
     return [];
   }
 }

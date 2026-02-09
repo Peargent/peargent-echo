@@ -3,13 +3,13 @@
 :root {
   /* Optikka-inspired Theme - Warm Beige */
   --background: #E8DED1;
-  --foreground: #1a1a1a;
-  --foreground-muted: #555555;
+  --foreground: #2C2825;       /* Warmer Black/Dark Brown */
+  --foreground-muted: #6B6259; /* Warm Grey */
   --primary: #4ade80;          /* Peargent Green */
   --primary-hover: #22c55e;
-  --secondary: #E0DBD0;
-  --border: #999999;           /* More visible border color */
-  --grid-line: rgba(0, 0, 0, 0.08);
+  --secondary: #DBCFBE;        /* Warmer Secondary (Darker than bg) */
+  --border: #C2B6A6;           /* Sharp, Warm Border */
+  --grid-line: rgba(44, 40, 37, 0.08); /* Warm Grid */
 }
 
 html.dark {

@@ -178,33 +178,30 @@ export const profile = action({
       const queryEmbedding = await generateEmbedding(args.query);
       const limit = args.limit || 5;
 
-      const results = await ctx.vectorSearch("memories", "by_embedding", {
+      const results = await ctx.vectorSearch("embeddings", "by_embedding", {
         vector: queryEmbedding,
         limit: limit,
         filter: (q) => q.eq("userId", args.userId),
       });
 
       // Get full memory documents
-      searchResults = await Promise.all(
-        results.map(async (result) => {
-          const memory: Doc<"memories"> | null = await ctx.runQuery(
-            internal.memories.getMemoryById,
-            { memoryId: result._id }
-          );
-          
-          if (!memory) return null;
-
-          return {
+      // Use the helper query from memories
+      const memoriesWithScore = await ctx.runQuery(internal.memories.getMemoriesFromEmbeddingIds, {
+          embeddingIds: results.map(r => r._id),
+          scores: results.map(r => r._score)
+      });
+      
+      searchResults = memoriesWithScore
+        .filter((m): m is NonNullable<typeof m> => m !== null)
+        .map(memory => ({
             _id: memory._id,
             content: memory.content,
             entities: memory.entities,
             facts: memory.facts,
             importance: memory.importance,
-            score: result._score,
+            score: memory._score,
             createdAt: memory.createdAt,
-          };
-        })
-      ).then(results => results.filter((r): r is NonNullable<typeof r> => r !== null));
+        }));
     }
 
     return {

@@ -8,9 +8,12 @@
  * @module
  */
 
+import type * as analytics from "../analytics.js";
 import type * as auth from "../auth.js";
 import type * as credits from "../credits.js";
 import type * as crons from "../crons.js";
+import type * as dev from "../dev.js";
+import type * as http from "../http.js";
 import type * as keys from "../keys.js";
 import type * as lib_crypto from "../lib/crypto.js";
 import type * as lib_embeddings from "../lib/embeddings.js";
@@ -25,9 +28,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  analytics: typeof analytics;
   auth: typeof auth;
   credits: typeof credits;
   crons: typeof crons;
+  dev: typeof dev;
+  http: typeof http;
   keys: typeof keys;
   "lib/crypto": typeof lib_crypto;
   "lib/embeddings": typeof lib_embeddings;

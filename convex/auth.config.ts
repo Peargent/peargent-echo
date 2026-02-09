@@ -1,10 +1,8 @@
-import GitHub from "@auth/core/providers/github";
-import Google from "@auth/core/providers/google";
-import { convexAuth } from "@convex-dev/auth/server";
-
-export const { auth, signIn, signOut, store } = convexAuth({
+export default {
   providers: [
-    GitHub,
-    Google,
+    {
+      domain: process.env.CONVEX_SITE_URL,
+      applicationID: "convex",
+    },
   ],
-});
+};

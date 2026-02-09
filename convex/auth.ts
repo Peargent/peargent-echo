@@ -1,9 +1,47 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { hashPassword, verifyPassword, generateSessionToken } from "./lib/crypto";
+import { convexAuth, getAuthUserId } from "@convex-dev/auth/server";
+import GitHub from "@auth/core/providers/github";
+import Google from "@auth/core/providers/google";
+
+// Convex Auth setup for OAuth providers
+export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
+  providers: [GitHub, Google],
+});
 
 const INITIAL_CREDITS = 100;
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+/**
+ * Get current OAuth user from Convex Auth session
+ */
+export const getOAuthUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return null;
+    }
+    
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      return null;
+    }
+    
+    return {
+      _id: user._id,
+      email: user.email,
+      name: user.name,
+      image: user.image,
+      credits: user.credits ?? INITIAL_CREDITS,
+      tokensProcessed: user.tokensProcessed ?? 0,
+      searchesMade: user.searchesMade ?? 0,
+      memoriesStored: user.memoriesStored ?? 0,
+    };
+  },
+});
+
 
 /**
  * Sign up a new user with email and password
@@ -18,7 +56,7 @@ export const signUp = mutation({
     // Check if user already exists
     const existingUser = await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase()))
+      .withIndex("email", (q) => q.eq("email", args.email.toLowerCase()))
       .first();
 
     if (existingUser) {
@@ -34,6 +72,8 @@ export const signUp = mutation({
       name: args.name,
       passwordHash,
       credits: INITIAL_CREDITS,
+      tokensProcessed: 0,
+      searchesMade: 0,
       createdAt: Date.now(),
     });
 
@@ -53,7 +93,7 @@ export const signUp = mutation({
 /**
  * Sign in with email and password
  */
-export const signIn = mutation({
+export const signInWithPassword = mutation({
   args: {
     email: v.string(),
     password: v.string(),
@@ -62,7 +102,7 @@ export const signIn = mutation({
     // Find user
     const user = await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase()))
+      .withIndex("email", (q) => q.eq("email", args.email.toLowerCase()))
       .first();
 
     if (!user || !user.passwordHash) {
@@ -89,9 +129,9 @@ export const signIn = mutation({
 });
 
 /**
- * Sign out - invalidate session
+ * Sign out - invalidate session (for email/password auth)
  */
-export const signOut = mutation({
+export const signOutWithToken = mutation({
   args: {
     token: v.string(),
   },
@@ -138,7 +178,12 @@ export const getCurrentUser = query({
 
     // Don't return password hash
     const { passwordHash, ...safeUser } = user;
-    return safeUser;
+    return {
+      ...safeUser,
+      tokensProcessed: user.tokensProcessed ?? 0,
+      searchesMade: user.searchesMade ?? 0,
+      memoriesStored: user.memoriesStored ?? 0,
+    };
   },
 });
 
