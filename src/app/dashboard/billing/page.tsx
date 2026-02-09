@@ -12,6 +12,8 @@ export default function BillingPage() {
     const createCheckout = useAction(api.payments.createCheckoutSession);
     const openPortal = useAction(api.payments.openCustomerPortal);
     const [loading, setLoading] = useState(false);
+    const [couponError, setCouponError] = useState("");
+    const [couponSuccess, setCouponSuccess] = useState("");
 
     const plan = user?.plan || "free";
     const isActive = user?.subscriptionStatus === "active";
@@ -55,15 +57,24 @@ export default function BillingPage() {
     const handleRedeem = async () => {
         if (!couponCode.trim()) return;
         setLoading(true);
+        setCouponError("");
+        setCouponSuccess("");
         try {
             const result = await redeemCoupon({ code: couponCode.trim() });
             if (result.success) {
-                alert(`Successfully redeemed!\n+${result.memories} Memories\n+${result.searches} Searches`);
+                setCouponSuccess(`Successfully redeemed: +${result.memories} Memories, +${result.searches} Searches`);
                 setCouponCode("");
+            } else {
+                if (result.error && result.error.includes("already redeemed")) {
+                    setCouponError("Coupon already redeemed");
+                } else {
+                    setCouponError("Invalid coupon");
+                }
             }
         } catch (error: any) {
+            // Keep try/catch for unexpected network errors
             console.error("Failed to redeem coupon:", error);
-            alert(error.message || "Failed to redeem coupon. Please try again.");
+            setCouponError("An unexpected error occurred. Please try again.");
         } finally {
             setLoading(false);
         }
@@ -126,17 +137,17 @@ export default function BillingPage() {
                                 {plan === 'free' ? (
                                     <button
                                         disabled={loading}
-                                        className="w-full py-3 px-4 bg-foreground text-background text-sm font-medium uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-50 cursor-default"
+                                        className={`w-full py-3 px-4 bg-foreground text-background text-sm font-medium uppercase tracking-wider hover:opacity-90 transition-all disabled:opacity-50 cursor-default ${loading ? "opacity-70 animate-pulse" : ""}`}
                                     >
-                                        {loading ? "Processing..." : "Pro [Coming Soon]"}
+                                        Pro [Coming Soon]
                                     </button>
                                 ) : (
                                     <button
                                         onClick={handleManage}
                                         disabled={loading}
-                                        className="w-full py-3 px-4 border border-foreground/10 text-foreground text-sm font-medium uppercase tracking-wider hover:bg-foreground/5 transition-colors disabled:opacity-50"
+                                        className={`w-full py-3 px-4 border border-foreground/10 text-foreground text-sm font-medium uppercase tracking-wider hover:bg-foreground/5 transition-all disabled:opacity-50 ${loading ? "opacity-70 animate-pulse" : ""}`}
                                     >
-                                        {loading ? "Processing..." : "Manage Subscription"}
+                                        Manage Subscription
                                     </button>
                                 )}
                             </div>
@@ -198,21 +209,37 @@ export default function BillingPage() {
                             <h2 className="text-xs font-medium tracking-widest uppercase text-foreground-muted mb-6 group-hover:text-foreground transition-colors">Redeem Coupon</h2>
 
                             <div className="relative">
-                                <div className="flex items-center border-b border-foreground/20 focus-within:border-foreground transition-colors pb-1">
+                                <div className="flex items-center border-b border-foreground/20 focus-within:border-foreground transition-all duration-300 pb-1">
                                     <input
                                         type="text"
                                         value={couponCode}
-                                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                        onChange={(e) => {
+                                            setCouponCode(e.target.value.toUpperCase());
+                                            setCouponError("");
+                                            setCouponSuccess("");
+                                        }}
                                         placeholder="ENTER CODE"
                                         className="flex-1 px-2 py-3 bg-transparent outline-none text-2xl font-light placeholder:text-foreground-muted/20 uppercase tracking-widest"
                                     />
                                     <button
                                         onClick={handleRedeem}
                                         disabled={loading || !couponCode.trim()}
-                                        className="px-6 py-2 ml-4 text-xs font-medium border border-foreground/10 uppercase tracking-widest hover:bg-foreground hover:text-background disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground transition-all"
+                                        className={`px-6 py-2 ml-4 text-xs font-medium border border-foreground/10 uppercase tracking-widest hover:bg-foreground hover:text-background disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground transition-all ${loading ? "opacity-70 animate-pulse" : ""}`}
                                     >
-                                        {loading ? "PROCESSING" : "REDEEM"}
+                                        REDEEM
                                     </button>
+                                </div>
+                                <div className="mt-2 min-h-[1rem]">
+                                    {couponError && (
+                                        <p className="text-[10px] text-red-500 font-medium uppercase tracking-widest">
+                                            {couponError}
+                                        </p>
+                                    )}
+                                    {couponSuccess && (
+                                        <p className="text-[10px] text-[#4ade80] font-medium uppercase tracking-widest">
+                                            {couponSuccess}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 

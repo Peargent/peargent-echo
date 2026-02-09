@@ -9,9 +9,9 @@ export const redeemCouponInternal = internalMutation({
     userId: v.id("users"),
     code: v.string() 
   },
-  handler: async (ctx, { userId, code }): Promise<{ success: boolean; memories: number; searches: number }> => {
+  handler: async (ctx, { userId, code }): Promise<{ success: boolean; memories: number; searches: number; error?: string }> => {
     const user = await ctx.db.get(userId);
-    if (!user) throw new Error("User not found");
+    if (!user) return { success: false, memories: 0, searches: 0, error: "User not found" };
 
     // 1. Find coupon
     const coupon = await ctx.db
@@ -20,13 +20,13 @@ export const redeemCouponInternal = internalMutation({
       .first();
 
     if (!coupon) {
-      throw new Error("Invalid coupon code");
+      return { success: false, memories: 0, searches: 0, error: "Invalid coupon code" };
     }
 
     // 2. Validate coupon
-    if (!coupon.isActive) throw new Error("Coupon is inactive");
-    if (coupon.expiresAt && Date.now() > coupon.expiresAt) throw new Error("Coupon expired");
-    if (coupon.maxUses !== Infinity && coupon.usedCount >= coupon.maxUses) throw new Error("Coupon usage limit reached");
+    if (!coupon.isActive) return { success: false, memories: 0, searches: 0, error: "Coupon is inactive" };
+    if (coupon.expiresAt && Date.now() > coupon.expiresAt) return { success: false, memories: 0, searches: 0, error: "Coupon expired" };
+    if (coupon.maxUses !== Infinity && coupon.usedCount >= coupon.maxUses) return { success: false, memories: 0, searches: 0, error: "Coupon usage limit reached" };
 
     // 3. Check if already redeemed
     const redemption = await ctx.db
@@ -35,7 +35,7 @@ export const redeemCouponInternal = internalMutation({
       .first();
 
     if (redemption) {
-      throw new Error("You have already redeemed this coupon");
+      return { success: false, memories: 0, searches: 0, error: "You have already redeemed this coupon" };
     }
 
     // 4. Grant bonus memories and searches
@@ -73,16 +73,16 @@ export const redeemCouponInternal = internalMutation({
 // Calculate effective limits (Public)
 export const redeemCoupon = mutation({
   args: { code: v.string() },
-  handler: async (ctx, { code }): Promise<{ success: boolean; memories: number; searches: number }> => {
+  handler: async (ctx, { code }): Promise<{ success: boolean; memories: number; searches: number; error?: string }> => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    if (!identity) return { success: false, memories: 0, searches: 0, error: "Not authenticated" };
     
     // Find authenticated user using the robust helper
     const user = await ctx.runQuery(internal.users.getUserByAuthId, {
       authId: identity.subject,
     });
     
-    if (!user) throw new Error("User not found");
+    if (!user) return { success: false, memories: 0, searches: 0, error: "User not found" };
 
     // Delegate to internal mutation
     return await ctx.runMutation(internal.coupons.redeemCouponInternal, {
