@@ -10,7 +10,7 @@ import {
 } from "./lib/embeddings";
 import { Doc, Id } from "./_generated/dataModel";
 
-const SIMILARITY_THRESHOLD = 0.92; // For duplicate detection
+const SIMILARITY_THRESHOLD = 0.65; // For duplicate/update detection
 
 // Type for memory with score
 interface MemoryWithScore extends Doc<"memories"> {
@@ -87,7 +87,7 @@ export const addMemory = action({
     });
 
     let similar: Doc<"memories"> | null = null;
-    if (results.length > 0 && results[0]._score >= 0.85) {
+    if (results.length > 0 && results[0]._score >= SIMILARITY_THRESHOLD) {
        // Get the embedding doc to find the reference
        // We need to fetch the memory doc. Since we are in an action, we use the helper query.
        const memories = await ctx.runQuery(internal.memories.getMemoriesFromEmbeddingIds, {
@@ -320,9 +320,13 @@ export const searchMemories = action({
       scores: results.map(r => r._score),
     });
 
-    // Filter nulls and apply custom ranking
+    // Minimum relevance score - only return memories above this threshold
+    const MIN_SEARCH_SCORE = 0.5;
+
+    // Filter nulls and apply minimum score threshold
     const rankedMemories: RankedMemory[] = memories
       .filter((m): m is MemoryWithScore => m !== null)
+      .filter((m: MemoryWithScore) => m._score >= MIN_SEARCH_SCORE)
       .map((memory: MemoryWithScore): RankedMemory => {
         const vectorScore = memory._score;
         const recencyScore = calculateRecencyScore(memory.createdAt);

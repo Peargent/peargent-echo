@@ -128,7 +128,7 @@ export default function DashboardLayout({
                             <span className="text-[10px] font-semibold text-foreground/40 uppercase tracking-[0.2em] pl-1">Library</span>
                         </div>
                         <div className="space-y-1">
-                            <NavLink href="/docs" icon="docs">
+                            <NavLink href="/dashboard/docs" icon="docs" active={pathname === "/dashboard/docs"}>
                                 Documentation
                             </NavLink>
                         </div>

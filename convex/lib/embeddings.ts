@@ -1,35 +1,35 @@
-import OpenAI from "openai";
+// import OpenAI from "openai"; // Removed as we are using fetch directly
 
-// Lazy initialization of OpenAI client for Cohere
-let openai: OpenAI | null = null;
+// OpenAI client removed
 
-function getOpenAIClient(): OpenAI {
-  if (!openai) {
-    const apiKey = process.env.COHERE_API_KEY;
-    if (!apiKey) {
-      throw new Error("COHERE_API_KEY environment variable is not set");
-    }
-    openai = new OpenAI({
-      apiKey: apiKey,
-      baseURL: "https://api.cohere.ai/compatibility/v1",
-    });
-  }
-  return openai;
-}
 
 /**
  * Generate embedding for a text string using Cohere via OpenAI SDK
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const client = getOpenAIClient();
+  const apiKey = getCohereKey();
   
-  const response = await client.embeddings.create({
-    model: "embed-english-v3.0",
-    input: text,
-    encoding_format: "float",
+  const response = await fetch("https://api.cohere.com/v1/embed", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "X-Client-Name": "peargent-echo"
+    },
+    body: JSON.stringify({
+      texts: [text],
+      model: "embed-english-v3.0",
+      input_type: "search_document"
+    }),
   });
-  
-  return response.data[0].embedding;
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Cohere API Error: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  return data.embeddings[0]; // Cohere v3 returns array of floats directly for float embedding type
 }
 
 /**
@@ -48,7 +48,7 @@ export interface MemoryClassification {
  * Classify whether a memory should be stored
  */
 export async function classifyMemory(content: string): Promise<MemoryClassification> {
-  const client = getOpenAIClient();
+  const apiKey = getCohereKey();
   
   const prompt = `You are a strict Memory Gatekeeper for an AI assistant.
 Your goal is to decide if the user's input contains PERMANENT, VALUABLE information worth storing in long-term memory.
@@ -75,15 +75,31 @@ Respond in JSON:
 }`;
 
   try {
-    const result = await client.chat.completions.create({
-      model: "command-r",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.1,
-      response_format: { type: "json_object" },
+    const response = await fetch("https://api.cohere.com/v2/chat", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "X-Client-Name": "peargent-echo"
+      },
+      body: JSON.stringify({
+        model: "command-r-08-2024",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+        response_format: { type: "json_object" }
+      }),
     });
-    
-    const text = result.choices[0].message.content || "{}";
+
+    if (!response.ok) {
+        throw new Error(`Cohere Chat API Error: ${response.status} ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    const text = data.message.content[0].text || "{}";
     const parsed = JSON.parse(text);
+    
+    console.log("Classification result for:", content, parsed);
+    
     return {
       category: parsed.category === "persistent" ? "persistent" : "irrelevant",
       reason: parsed.reason || "AI decision",
@@ -111,7 +127,7 @@ export async function analyzeMemoryIntegration(
     reason: string;
     refinedContent?: string; // The content to write (for update/merge)
 }> {
-    const client = getOpenAIClient();
+    const apiKey = getCohereKey();
     
     const prompt = `You are a Memory Manager.
 We have a NEW piece of information and an EXISTING memory that is semantically similar.
@@ -136,14 +152,27 @@ Respond in JSON:
 }`;
 
     try {
-        const result = await client.chat.completions.create({
-            model: "command-r",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.1,
-            response_format: { type: "json_object" },
+        const response = await fetch("https://api.cohere.com/v2/chat", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+                "X-Client-Name": "peargent-echo"
+            },
+            body: JSON.stringify({
+                model: "command-r-08-2024",
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.1,
+                response_format: { type: "json_object" }
+            }),
         });
 
-        const text = result.choices[0].message.content || "{}";
+        if (!response.ok) {
+            throw new Error(`Cohere Chat API Error: ${response.status} ${await response.text()}`);
+        }
+
+        const data = await response.json();
+        const text = data.message.content[0].text || "{}";
         const parsed = JSON.parse(text);
         
         return {
@@ -173,7 +202,7 @@ export async function extractProfileUpdate(
   existingStatic: string[],
   existingDynamic: string[]
 ): Promise<ProfileUpdate> {
-  const client = getOpenAIClient();
+  const apiKey = getCohereKey();
   
   const prompt = `Extract user profile information from this text.
 
@@ -202,14 +231,27 @@ Text to analyze:
 "${content}"`;
 
   try {
-    const result = await client.chat.completions.create({
-      model: "command-r",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      response_format: { type: "json_object" },
+    const response = await fetch("https://api.cohere.com/v2/chat", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "X-Client-Name": "peargent-echo"
+        },
+        body: JSON.stringify({
+            model: "command-r-08-2024",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.2,
+            response_format: { type: "json_object" }
+        }),
     });
-    
-    const text = result.choices[0].message.content || "{}";
+
+    if (!response.ok) {
+        throw new Error(`Cohere Chat API Error: ${response.status} ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    const text = data.message.content[0].text || "{}";
     const parsed = JSON.parse(text);
     return {
       staticFacts: parsed.staticFacts || [],
@@ -232,7 +274,7 @@ export async function extractMemoryInfo(content: string): Promise<{
   facts: string[];
   importance: number;
 }> {
-  const client = getOpenAIClient();
+  const apiKey = getCohereKey();
 
   const prompt = `Analyze the given text and extract:
 1. Entities: Important people, places, concepts, or things mentioned
@@ -250,14 +292,27 @@ Text to analyze:
 ${content}`;
 
   try {
-    const result = await client.chat.completions.create({
-      model: "command-r",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
-      response_format: { type: "json_object" },
+    const response = await fetch("https://api.cohere.com/v2/chat", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "X-Client-Name": "peargent-echo"
+        },
+        body: JSON.stringify({
+            model: "command-r-08-2024",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.3,
+            response_format: { type: "json_object" }
+        }),
     });
-    
-    const text = result.choices[0].message.content || "{}";
+
+    if (!response.ok) {
+        throw new Error(`Cohere Chat API Error: ${response.status} ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    const text = data.message.content[0].text || "{}";
     const parsed = JSON.parse(text);
     return {
       entities: parsed.entities || [],
@@ -283,7 +338,7 @@ export async function findMemoryRelationships(
 ): Promise<Array<{ memoryId: string; type: "extends" | "contradicts" | "relates_to"; strength: number }>> {
   if (existingMemories.length === 0) return [];
   
-  const client = getOpenAIClient();
+  const apiKey = getCohereKey();
 
   const memorySummary = existingMemories
     .slice(0, 10) // Limit to 10 for context length
@@ -314,14 +369,27 @@ For each related memory, respond in JSON:
 Only include memories with clear relationships. Use strength 0-1 (higher = stronger connection).`;
 
   try {
-    const result = await client.chat.completions.create({
-      model: "command-r",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      response_format: { type: "json_object" },
+    const response = await fetch("https://api.cohere.com/v2/chat", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "X-Client-Name": "peargent-echo"
+        },
+        body: JSON.stringify({
+            model: "command-r-08-2024",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.2,
+            response_format: { type: "json_object" }
+        }),
     });
-    
-    const text = result.choices[0].message.content || "{}";
+
+    if (!response.ok) {
+        throw new Error(`Cohere Chat API Error: ${response.status} ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    const text = data.message.content[0].text || "{}";
     const parsed = JSON.parse(text);
     
     return (parsed.relationships || [])
@@ -335,6 +403,15 @@ Only include memories with clear relationships. Use strength 0-1 (higher = stron
     console.error("Relationship finding failed:", error);
     return [];
   }
+}
+
+// Helper to get API key (moved to top level if not already there, ensuring availability)
+function getCohereKey(): string {
+  const apiKey = process.env.COHERE_API_KEY;
+  if (!apiKey) {
+    throw new Error("COHERE_API_KEY environment variable is not set");
+  }
+  return apiKey;
 }
 
 /**
