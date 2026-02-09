@@ -6,6 +6,7 @@ import { useConvexAuth } from "convex/react";
 import { api } from "@/lib/convex";
 import Link from "next/link";
 import { VercelAreaChart } from "@/components/dashboard/charts";
+import { PageLoader } from "@/components/ui/loading-spinner";
 
 export default function DashboardPage() {
     const [token, setToken] = useState<string | null>(null);
@@ -20,18 +21,13 @@ export default function DashboardPage() {
     const oauthUser = useQuery(api.auth.getOAuthUser, isOAuthAuthenticated ? {} : "skip");
     const user = token ? emailPasswordUser : oauthUser;
 
-    // Get Analytics Data
-    const analytics = useQuery(api.analytics.getDashboardStats, user ? { days: 30 } : "skip");
+    // Get Analytics Data (Fetch 365 days to match Usage page for cache sharing)
+    const analytics = useQuery(api.analytics.getDashboardStats, user ? { days: 365 } : "skip");
 
     if (!user) {
-        return (
-            <div className="h-full flex items-center justify-center">
-                <div className="text-foreground-muted text-sm">Loading...</div>
-            </div>
-        );
+        return <PageLoader />;
     }
 
-    // Extract recent 7 days for mini charts
     // Extract recent 7 days for mini charts
     const recentHistory = analytics?.history.slice(-7) || [];
 

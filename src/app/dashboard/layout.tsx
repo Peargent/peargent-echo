@@ -8,6 +8,7 @@ import { useConvexAuth } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/lib/convex";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { PageLoader } from "@/components/ui/loading-spinner";
 
 export default function DashboardLayout({
     children,
@@ -43,6 +44,13 @@ export default function DashboardLayout({
     const hasOAuth = isOAuthAuthenticated;
     const isAuthLoading = isLoading || oauthLoading || (hasToken && emailPasswordUser === undefined) || (hasOAuth && !hasToken && oauthUser === undefined);
 
+    // PREFETCH DATA FOR SEAMLESS NAVIGATION
+    // 1. Analytics (365 days)
+    useQuery(api.analytics.getDashboardStats, user ? { days: 365 } : "skip");
+
+    // 2. Memories (Limit 50)
+    useQuery(api.memories.listMemories, user ? { userId: user._id, limit: 50 } : "skip");
+
     // Redirect to login if not authenticated
     useEffect(() => {
         if (!isLoading && !oauthLoading && !hasToken && !hasOAuth) {
@@ -63,8 +71,8 @@ export default function DashboardLayout({
 
     if (isAuthLoading) {
         return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
-                <div className="text-foreground-muted text-sm">Loading...</div>
+            <div className="h-screen bg-background flex items-center justify-center">
+                <PageLoader />
             </div>
         );
     }
@@ -74,9 +82,9 @@ export default function DashboardLayout({
     }
 
     return (
-        <div className="min-h-screen bg-background flex">
+        <div className="h-screen overflow-hidden bg-background flex">
             {/* Navigation Sidebar */}
-            <aside className="w-[260px] flex flex-col bg-background/50 relative z-10 pb-4 border-r border-foreground/5 h-screen sticky top-0">
+            <aside className="w-[260px] flex flex-col bg-background/50 relative z-10 pb-4 border-r border-foreground/5 h-full">
                 {/* Logo */}
                 <div className="h-24 flex items-center px-6">
                     <Link href="/dashboard" className="flex items-center gap-3 group">
@@ -88,7 +96,7 @@ export default function DashboardLayout({
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 space-y-6 py-4">
+                <nav className="flex-1 space-y-6 py-4 overflow-y-auto">
                     {/* Main Links */}
                     <div className="space-y-1">
                         <NavLink href="/dashboard" icon="link" active={pathname === "/dashboard"}>
@@ -143,13 +151,13 @@ export default function DashboardLayout({
                                     Memories
                                 </span>
                                 <span className="font-medium text-foreground">
-                                    {user.memoriesStored ?? 0} of 5.0K
+                                    {user.memoriesStored ?? 0} of 1.0K
                                 </span>
                             </div>
                             <div className="h-1.5 w-full bg-foreground/10 rounded-full overflow-hidden">
                                 <div
                                     className="h-full bg-foreground rounded-full transition-all duration-500"
-                                    style={{ width: `${Math.min(((user.memoriesStored ?? 0) / 5000) * 100, 100)}%` }}
+                                    style={{ width: `${Math.min(((user.memoriesStored ?? 0) / 1000) * 100, 100)}%` }}
                                 />
                             </div>
                         </div>
@@ -164,13 +172,13 @@ export default function DashboardLayout({
                                     Searches
                                 </span>
                                 <span className="font-medium text-foreground">
-                                    {user.searchesMade ?? 0} of 10.0K
+                                    {user.searchesMade ?? 0} of 1.0K
                                 </span>
                             </div>
                             <div className="h-1.5 w-full bg-foreground/10 rounded-full overflow-hidden">
                                 <div
                                     className="h-full bg-foreground rounded-full transition-all duration-500"
-                                    style={{ width: `${Math.min(((user.searchesMade ?? 0) / 10000) * 100, 100)}%` }}
+                                    style={{ width: `${Math.min(((user.searchesMade ?? 0) / 1000) * 100, 100)}%` }}
                                 />
                             </div>
                         </div>

@@ -47,7 +47,7 @@ export const addMemory = action({
     updateProfile: v.optional(v.boolean()), // Whether to update user profile
   },
   handler: async (ctx, args): Promise<AddMemoryResult> => {
-    const MEMORY_LIMIT = 100;
+    const MEMORY_LIMIT = 1000;
 
     // Check memory limit
     const canAdd = await ctx.runQuery(internal.memories.checkMemoryLimit, {
@@ -285,15 +285,18 @@ export const searchMemories = action({
     includeGraph: v.optional(v.boolean()), // Whether to include related memories
   },
   handler: async (ctx, args): Promise<SearchResult[]> => {
-    // Check credits
-    const creditCheck = await ctx.runQuery(internal.credits.checkCreditsInternal, {
+    // Check search limit
+    const SEARCH_LIMIT = 1000;
+    const canSearch = await ctx.runQuery(internal.memories.checkSearchLimit, {
       userId: args.userId,
-      operation: "search",
+      limit: SEARCH_LIMIT,
     });
 
-    if (!creditCheck.hasEnough) {
-      throw new Error(`Insufficient credits. Required: ${creditCheck.required}, Available: ${creditCheck.available}`);
+    if (!canSearch) {
+      throw new Error(`Search limit reached (${SEARCH_LIMIT}). Please upgrade to search more.`);
     }
+
+
 
     // Generate query embedding
     const queryEmbedding = await generateEmbedding(args.query);
@@ -354,11 +357,7 @@ export const searchMemories = action({
       tokens: estimatedTokens,
     });
 
-    // Deduct credits (if utilizing credit system)
-    await ctx.runMutation(internal.credits.deductCreditsInternal, {
-      userId: args.userId,
-      operation: "search",
-    });
+
 
     // Build results with optional graph connections
     const searchResults: SearchResult[] = await Promise.all(
@@ -796,6 +795,18 @@ export const incrementMemoryCount = internalMutation({
         memoriesStored: (user.memoriesStored ?? 0) + 1,
       });
     }
+  },
+});
+
+export const checkSearchLimit = internalQuery({
+  args: {
+    userId: v.id("users"),
+    limit: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return false;
+    return (user.searchesMade ?? 0) < args.limit;
   },
 });
 

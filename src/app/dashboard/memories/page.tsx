@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/lib/convex";
+import { PageLoader } from "@/components/ui/loading-spinner";
 
 export default function MemoriesPage() {
     const [token, setToken] = useState<string | null>(null);
@@ -26,11 +27,7 @@ export default function MemoriesPage() {
     );
 
     if (!user) {
-        return (
-            <div className="p-8">
-                <div className="animate-pulse text-foreground-muted">Loading...</div>
-            </div>
-        );
+        return <PageLoader />;
     }
 
     return (

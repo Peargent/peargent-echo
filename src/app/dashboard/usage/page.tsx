@@ -5,9 +5,11 @@ import { useQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/lib/convex";
 import { VercelAreaChart, VercelBarChart } from "@/components/dashboard/charts";
+import { PageLoader } from "@/components/ui/loading-spinner";
 
 export default function UsagePage() {
     const [token, setToken] = useState<string | null>(null);
+    const [timeRange, setTimeRange] = useState<number>(30); // Default 30 days
     const { isAuthenticated: isOAuthAuthenticated } = useConvexAuth();
 
     useEffect(() => {
@@ -19,20 +21,22 @@ export default function UsagePage() {
     const oauthUser = useQuery(api.auth.getOAuthUser, isOAuthAuthenticated ? {} : "skip");
     const user = token ? emailPasswordUser : oauthUser;
 
-    // Get Analytics Data (30 days)
-    const analytics = useQuery(api.analytics.getDashboardStats, user ? { days: 30 } : "skip");
+    // Get Analytics Data (Fetch all year data once)
+    const analytics = useQuery(api.analytics.getDashboardStats, user ? { days: 365 } : "skip");
 
-    if (!user || !analytics) {
-        return (
-            <div className="p-8">
-                <div className="animate-pulse text-foreground-muted">Loading...</div>
-            </div>
-        );
+    if (!user) {
+        return <PageLoader />;
+    }
+
+    // Show loading only on initial fetch
+    if (!analytics) {
+        return <PageLoader />;
     }
 
     // Prepare Data
-    // Prepare Data for Charts
-    const history = analytics?.history || [];
+    // Prepare Data for Charts (Filter client-side for instant updates)
+    const fullHistory = analytics?.history || [];
+    const history = fullHistory.slice(-timeRange);
 
     // Format helper
     const formatData = (data: any[], key: string) => data.map(d => ({
@@ -82,6 +86,29 @@ export default function UsagePage() {
                         <StatsCard label="Memories Added" value={totalMemories} color="text-purple-400" />
                         <StatsCard label="Total Retrievals" value={analytics.userInfo.searchesMade} color="text-yellow-400" />
                         <StatsCard label="Profile Knowledge" value={analytics.userInfo.profileFactCount} color="text-pink-400" />
+                    </div>
+
+                    {/* Main Graphs Header */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex bg-secondary/10 p-1 rounded-sm border border-border/40">
+                            {[
+                                { label: '30D', value: 30 },
+                                { label: '3M', value: 90 },
+                                { label: '6M', value: 180 },
+                                { label: 'ALL', value: 365 }
+                            ].map((option) => (
+                                <button
+                                    key={option.label}
+                                    onClick={() => setTimeRange(option.value)}
+                                    className={`px-3 py-1 text-[10px] font-medium transition-all rounded-sm ${timeRange === option.value
+                                        ? 'bg-background text-foreground shadow-sm'
+                                        : 'text-foreground-muted hover:text-foreground'
+                                        }`}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {/* Main Graphs */}

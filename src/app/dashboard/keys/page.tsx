@@ -5,6 +5,7 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/lib/convex";
 import type { Id } from "@/lib/convex";
+import { PageLoader } from "@/components/ui/loading-spinner";
 
 export default function APIKeysPage() {
     const [token, setToken] = useState<string | null>(null);
@@ -71,11 +72,7 @@ export default function APIKeysPage() {
     };
 
     if (!user) {
-        return (
-            <div className="p-8">
-                <div className="animate-pulse text-foreground-muted">Loading...</div>
-            </div>
-        );
+        return <PageLoader />;
     }
 
     return (
@@ -109,7 +106,7 @@ export default function APIKeysPage() {
                     <h2 className="text-lg font-medium mb-6">Your API Keys</h2>
 
                     {apiKeys === undefined ? (
-                        <div className="text-foreground-muted animate-pulse">Loading keys...</div>
+                        <PageLoader />
                     ) : apiKeys.length === 0 ? (
                         <div className="text-center py-20 border border-border/40 border-dashed rounded-lg bg-secondary/5">
                             <div className="w-12 h-12 rounded-full bg-secondary/20 flex items-center justify-center mx-auto mb-4">
