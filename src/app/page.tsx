@@ -126,7 +126,7 @@ export default function Home() {
             href="/signup"
             className="inline-block px-12 py-5 bg-foreground text-background text-sm uppercase tracking-widest font-medium hover:bg-[#4ade80] hover:text-black transition-all"
           >
-            Get 100 Free Credits
+            Get 100 Free Memories
           </Link>
         </section>
 

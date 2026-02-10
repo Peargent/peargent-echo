@@ -24,6 +24,11 @@ export const metadata: Metadata = {
   title: "Peargent Echo - AI Memory for Agents",
   description: "Intelligent memory layer for AI agents. Store, search, and retrieve memories with semantic understanding.",
   keywords: ["AI", "memory", "agents", "embeddings", "semantic search"],
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon-96x96.png",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({

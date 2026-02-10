@@ -1,4 +1,4 @@
-import { mutation, action, internalMutation } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
@@ -61,56 +61,20 @@ export const redeemCoupon = mutation({
   },
 });
 
-export const migrateUsageLogsBatch = internalMutation({
+export const createCoupon = mutation({
   args: {
-    cursor: v.optional(v.string()),
-    limit: v.number(),
+    code: v.string(),
+    memories: v.number(),
+    searches: v.number(),
+    maxUses: v.number(),
   },
-  handler: async (ctx, args) => {
-    const results = await ctx.db
-      .query("usageLogs")
-      .paginate({ cursor: args.cursor ?? null, numItems: args.limit });
-
-    let updated = 0;
-    for (const log of results.page) {
-      const { creditsUsed, ...rest } = log as any;
-      if (creditsUsed !== undefined) {
-        await ctx.db.replace(log._id, rest);
-        updated++;
-      }
-    }
-
-    return {
-      updated,
-      continueCursor: results.continueCursor,
-      isDone: results.isDone,
-    };
-  },
-});
-
-export const migrateUsageLogs = action({
-  args: {},
-  handler: async (ctx) => {
-    let cursor: string | null = null; // Start with null cursor
-    let isDone = false;
-    let totalUpdated = 0;
-
-    console.log("Starting migration...");
-
-    while (!isDone) {
-      const result: any = await ctx.runMutation(internal.dev.migrateUsageLogsBatch, {
-        cursor: cursor ?? undefined, // Pass undefined if null
-        limit: 100,
-      });
-
-      totalUpdated += result.updated;
-      cursor = result.continueCursor;
-      isDone = result.isDone;
-      
-      console.log(`Processed batch. Updated: ${result.updated}. Total: ${totalUpdated}`);
-    }
-
-    return `Migration complete. Fixed ${totalUpdated} usage logs.`;
+  handler: async (ctx, args): Promise<string> => {
+    return await ctx.runMutation(internal.coupons.createCoupon, {
+      code: args.code,
+      memories: args.memories,
+      searches: args.searches,
+      maxUses: args.maxUses,
+    });
   },
 });
 

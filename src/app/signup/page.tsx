@@ -12,15 +12,9 @@ import { Navbar } from "@/components/Navbar";
 export default function SignupPage() {
     const router = useRouter();
     const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
-    const [name, setName] = useState("");
     const [error, setError] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<string | null>(null);
 
-    const signUp = useMutation(api.auth.signUp);
     const { signIn: signInWithOAuth } = useAuthActions();
 
     // Redirect to dashboard if already authenticated via OAuth
@@ -30,33 +24,7 @@ export default function SignupPage() {
         }
     }, [isAuthenticated, authLoading, router]);
 
-    // Email/password signup
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError("");
 
-        if (password !== confirmPassword) {
-            setError("Passwords do not match");
-            return;
-        }
-
-        if (password.length < 8) {
-            setError("Password must be at least 8 characters");
-            return;
-        }
-
-        setIsLoading(true);
-
-        try {
-            const result = await signUp({ email, password, name: name || undefined });
-            localStorage.setItem("peargent_echo_token", result.token);
-            router.push("/dashboard");
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to create account");
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     // OAuth sign in/up - redirects to provider, then back to SITE_URL
     const handleOAuthSignIn = async (provider: "github" | "google") => {
@@ -83,7 +51,7 @@ export default function SignupPage() {
                         <span className="text-stroke">Sign Up</span>
                     </h1>
                     <p className="mt-6 text-foreground-muted text-lg">
-                        Start with 100 free credits
+                        Start with 100 free Memories
                     </p>
                 </div>
 
@@ -91,7 +59,7 @@ export default function SignupPage() {
                 <div className="flex flex-col justify-center px-6 md:px-12 lg:px-20 pt-24 md:pt-0 pb-12">
                     {/* Mobile Title */}
                     <h1 className="md:hidden text-4xl font-medium mb-4 text-stroke">Sign Up</h1>
-                    <p className="md:hidden text-foreground-muted mb-8">Start with 100 free credits</p>
+                    <p className="md:hidden text-foreground-muted mb-8">Start with 100 free Memories</p>
 
                     <div className="space-y-6 max-w-md">
                         {error && (
@@ -128,74 +96,7 @@ export default function SignupPage() {
                             </button>
                         </div>
 
-                        {/* Divider */}
-                        <div className="flex items-center gap-4">
-                            <div className="flex-1 h-px bg-border" />
-                            <span className="text-foreground-muted text-sm">or</span>
-                            <div className="flex-1 h-px bg-border" />
-                        </div>
 
-                        {/* Email/Password Form */}
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            {/* Name */}
-                            <div>
-                                <input
-                                    type="text"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    className="w-full bg-transparent border-0 border-b border-border py-4 text-lg focus:outline-none focus:border-foreground transition-colors placeholder:text-foreground-muted"
-                                    placeholder="Name"
-                                />
-                            </div>
-
-                            {/* Email */}
-                            <div>
-                                <input
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full bg-transparent border-0 border-b border-border py-4 text-lg focus:outline-none focus:border-foreground transition-colors placeholder:text-foreground-muted"
-                                    placeholder="Email*"
-                                    required
-                                />
-                            </div>
-
-                            {/* Password */}
-                            <div>
-                                <input
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full bg-transparent border-0 border-b border-border py-4 text-lg focus:outline-none focus:border-foreground transition-colors placeholder:text-foreground-muted"
-                                    placeholder="Password*"
-                                    required
-                                />
-                            </div>
-
-                            {/* Confirm Password */}
-                            <div>
-                                <input
-                                    type="password"
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="w-full bg-transparent border-0 border-b border-border py-4 text-lg focus:outline-none focus:border-foreground transition-colors placeholder:text-foreground-muted"
-                                    placeholder="Confirm Password*"
-                                    required
-                                />
-                            </div>
-
-                            {/* Submit Button */}
-                            <div className="pt-6">
-                                <button
-                                    type="submit"
-                                    disabled={isLoading}
-                                    className="inline-flex items-center gap-3 text-sm font-medium tracking-widest uppercase hover:text-[#4ade80] transition-colors disabled:opacity-50"
-                                >
-                                    <span className="w-1.5 h-1.5 bg-current rounded-full" />
-                                    {isLoading ? "Creating account..." : "Submit"}
-                                </button>
-                            </div>
-                        </form>
 
                         {/* Link to login */}
                         <p className="text-foreground-muted text-sm">

@@ -4,12 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { ThemeToggle } from "./ThemeToggle";
 
+import { useConvexAuth } from "convex/react";
+
 export function MobileMenu() {
     const [isOpen, setIsOpen] = useState(false);
+    const { isAuthenticated } = useConvexAuth();
 
     return (
         <>
-            {/* Hamburger Button - visible only on mobile */}
+            {/* ... (hamburger button same) ... */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="md:hidden w-10 h-10 flex flex-col justify-center items-end gap-[6px] z-[60]"
@@ -55,13 +58,23 @@ export function MobileMenu() {
                             </Link>
                         </li>
                         <li>
-                            <Link
-                                href="/signup"
-                                className="text-4xl font-medium text-[#4ade80] hover:opacity-80 transition-colors"
-                                onClick={() => setIsOpen(false)}
-                            >
-                                Get started
-                            </Link>
+                            {isAuthenticated ? (
+                                <Link
+                                    href="/dashboard"
+                                    className="text-4xl font-medium text-[#4ade80] hover:opacity-80 transition-colors"
+                                    onClick={() => setIsOpen(false)}
+                                >
+                                    Dashboard
+                                </Link>
+                            ) : (
+                                <Link
+                                    href="/signup"
+                                    className="text-4xl font-medium text-[#4ade80] hover:opacity-80 transition-colors"
+                                    onClick={() => setIsOpen(false)}
+                                >
+                                    Get started
+                                </Link>
+                            )}
                         </li>
                     </ul>
 

@@ -4,12 +4,16 @@ import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { MobileMenu } from "@/components/MobileMenu";
 
+import { useConvexAuth } from "convex/react";
+
 interface NavbarProps {
     showAuthLinks?: boolean;
     showClose?: boolean;
 }
 
 export function Navbar({ showAuthLinks = true, showClose = false }: NavbarProps) {
+    const { isAuthenticated, isLoading } = useConvexAuth();
+
     return (
         <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex justify-between items-center text-xs font-medium tracking-widest uppercase">
             <Link href="/" className="flex items-center gap-2 animate-reveal-up">
@@ -32,8 +36,22 @@ export function Navbar({ showAuthLinks = true, showClose = false }: NavbarProps)
                     {/* Desktop Nav */}
                     {showAuthLinks && (
                         <div className="hidden md:flex gap-6 items-center animate-reveal-up delay-100">
-                            <Link href="/login" className="hover:text-[#4ade80] transition-colors">Sign In</Link>
-                            <Link href="/signup" className="hover:text-[#4ade80] transition-colors">Sign Up</Link>
+                            {isLoading ? (
+                                // Loading state skeleton
+                                <div className="h-4 w-20 bg-foreground/10 animate-pulse rounded" />
+                            ) : isAuthenticated ? (
+                                <Link
+                                    href="/dashboard"
+                                    className="px-4 py-2 border border-[#4ade80] text-[#4ade80] hover:bg-[#4ade80] hover:text-black transition-all"
+                                >
+                                    Dashboard
+                                </Link>
+                            ) : (
+                                <>
+                                    <Link href="/login" className="hover:text-[#4ade80] transition-colors">Sign In</Link>
+                                    <Link href="/signup" className="hover:text-[#4ade80] transition-colors">Sign Up</Link>
+                                </>
+                            )}
                             <ThemeToggle />
                         </div>
                     )}

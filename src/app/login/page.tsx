@@ -12,13 +12,9 @@ import { Navbar } from "@/components/Navbar";
 export default function LoginPage() {
     const router = useRouter();
     const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
     const [error, setError] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<string | null>(null);
 
-    const signInWithPassword = useMutation(api.auth.signInWithPassword);
     const { signIn: signInWithOAuth } = useAuthActions();
 
     // Redirect to dashboard if already authenticated via OAuth
@@ -28,22 +24,7 @@ export default function LoginPage() {
         }
     }, [isAuthenticated, authLoading, router]);
 
-    // Email/password sign in
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError("");
-        setIsLoading(true);
 
-        try {
-            const result = await signInWithPassword({ email, password });
-            localStorage.setItem("peargent_echo_token", result.token);
-            router.push("/dashboard");
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to sign in");
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     // OAuth sign in - redirects to provider, then back to SITE_URL  
     const handleOAuthSignIn = async (provider: "github" | "google") => {
@@ -111,54 +92,8 @@ export default function LoginPage() {
                             </button>
                         </div>
 
-                        {/* Divider */}
-                        <div className="flex items-center gap-4">
-                            <div className="flex-1 h-px bg-border" />
-                            <span className="text-foreground-muted text-sm">or</span>
-                            <div className="flex-1 h-px bg-border" />
-                        </div>
-
-                        {/* Email/Password Form */}
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            {/* Email */}
-                            <div>
-                                <input
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full bg-transparent border-0 border-b border-border py-4 text-lg focus:outline-none focus:border-foreground transition-colors placeholder:text-foreground-muted"
-                                    placeholder="Email*"
-                                    required
-                                />
-                            </div>
-
-                            {/* Password */}
-                            <div>
-                                <input
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full bg-transparent border-0 border-b border-border py-4 text-lg focus:outline-none focus:border-foreground transition-colors placeholder:text-foreground-muted"
-                                    placeholder="Password*"
-                                    required
-                                />
-                            </div>
-
-                            {/* Submit Button */}
-                            <div className="pt-4">
-                                <button
-                                    type="submit"
-                                    disabled={isLoading}
-                                    className="inline-flex items-center gap-3 text-sm font-medium tracking-widest uppercase hover:text-[#4ade80] transition-colors disabled:opacity-50"
-                                >
-                                    <span className="w-1.5 h-1.5 bg-current rounded-full" />
-                                    {isLoading ? "Signing in..." : "Submit"}
-                                </button>
-                            </div>
-                        </form>
-
                         {/* Link to signup */}
-                        <p className="text-foreground-muted text-sm">
+                        <p className="text-foreground-muted text-sm text-center pt-4">
                             Don&apos;t have an account?{" "}
                             <Link href="/signup" className="text-foreground hover:text-[#4ade80] transition-colors">
                                 Sign up
