@@ -136,11 +136,11 @@ export default function Home() {
             <span>© 2026 Peargent Echo</span>
             <span>All Rights Reserved</span>
           </div>
-          <div className="flex gap-8">
+          {/* <div className="flex gap-8">
             <Link href="#" className="hover:text-foreground">Privacy</Link>
             <Link href="#" className="hover:text-foreground">Terms</Link>
             <Link href="#" className="hover:text-foreground">Twitter</Link>
-          </div>
+          </div> */}
         </footer>
 
       </main>

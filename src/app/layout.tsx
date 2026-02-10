@@ -25,9 +25,12 @@ export const metadata: Metadata = {
   description: "Intelligent memory layer for AI agents. Store, search, and retrieve memories with semantic understanding.",
   keywords: ["AI", "memory", "agents", "embeddings", "semantic search"],
   icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon-96x96.png",
-    apple: "/apple-touch-icon.png",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-96x96.png", type: "image/png", sizes: "96x96" },
+    ],
+    apple: { url: "/apple-touch-icon.png", sizes: "180x180" },
   },
 };
 

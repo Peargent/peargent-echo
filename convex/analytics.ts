@@ -78,7 +78,7 @@ export const getDashboardStats = query({
         .query("usageLogs")
         .withIndex("by_user_date", (q) => q.eq("userId", user._id))
         .order("desc")
-        .take(20);
+        .take(10);
 
     // 4. Get Current Month Retrievals
     const startOfMonth = new Date();

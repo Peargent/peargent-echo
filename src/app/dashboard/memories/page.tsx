@@ -95,11 +95,11 @@ export default function MemoriesPage() {
                                     <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
                                     <div className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/50"></div>
                                 </div>
-                                <code className="text-xs font-mono text-foreground-muted block leading-relaxed">
+                                {/* <code className="text-xs font-mono text-foreground-muted block leading-relaxed">
                                     <span className="text-purple-400">curl</span> -X POST /api/v1/memories \<br />
                                     &nbsp;&nbsp;-H <span className="text-green-400">"Authorization: Bearer YOUR_KEY"</span> \<br />
                                     &nbsp;&nbsp;-d <span className="text-yellow-400">{'\'{"content": "User likes Python"}\''}</span>
-                                </code>
+                                </code> */}
                             </div>
                         </div>
                     ) : (
