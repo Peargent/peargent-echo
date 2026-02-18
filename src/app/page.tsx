@@ -14,10 +14,10 @@ export default function Home() {
       <main className="relative z-10 pt-24 md:pt-32">
 
         {/* Dynamic Hero Section */}
-        <section className="min-h-[85vh] flex flex-col justify-between relative px-6">
+        <section className="min-h-[calc(100vh-theme(spacing.24))] md:min-h-[calc(100vh-theme(spacing.32))] flex flex-col justify-between relative px-6">
 
           {/* Top Left Text - Desktop Only */}
-          <div className="hidden md:block max-w-[200px] mt-44 text-xs font-medium tracking-widest uppercase opacity-70 animate-reveal-up delay-200">
+          <div className="hidden md:block max-w-[200px] mt-24 text-xs font-medium tracking-widest uppercase opacity-70 animate-reveal-up delay-200">
             <p>Persistent Memory</p>
             <p>For AI Agents</p>
           </div>
@@ -35,14 +35,14 @@ export default function Home() {
           {/* Desktop Hero Grid */}
           <div className="hidden md:grid grid-cols-2 items-end mt-auto relative z-10 border-t border-border/50">
             {/* Huge Headline */}
-            <div className="pt-12 pb-12 border-r border-border/50 pr-8">
+            <div className="pt-8 pb-8 border-r border-border/50 pr-8">
               <h1 className="text-[8vw] leading-[0.85] tracking-tighter font-semibold -ml-[0.05em] animate-reveal-up delay-200">
                 <span className="text-foreground">Meet</span> <span className="text-stroke">Echo</span>
               </h1>
             </div>
 
             {/* Description Block */}
-            <div className="pt-12 pb-12 pl-14 md:pl-32 flex flex-col animate-reveal-up delay-400">
+            <div className="pt-8 pb-8 pl-14 md:pl-32 flex flex-col animate-reveal-up delay-400">
               <Link
                 href="/signup"
                 className="inline-flex items-center gap-3 px-6 py-3 border border-border text-lg font-medium tracking-wider uppercase hover:border-[#4ade80] hover:text-[#4ade80] transition-colors w-fit mb-6"
