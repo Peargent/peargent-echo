@@ -15,7 +15,7 @@ export function Navbar({ showAuthLinks = true, showClose = false }: NavbarProps)
     const { isAuthenticated, isLoading } = useConvexAuth();
 
     return (
-        <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex justify-between items-center text-xs font-medium tracking-widest uppercase">
+        <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex justify-between items-center text-xs font-medium tracking-widest uppercase bg-background/80 backdrop-blur-md">
             <Link href="/" className="flex items-center gap-2 animate-reveal-up">
                 <div className="w-3 h-3 bg-[#4ade80] rounded-sm animate-pulse" />
                 <span className="text-2xl md:text-4xl lowercase tracking-normal font-semibold" style={{ fontFamily: 'var(--font-instrument-serif)' }}>
