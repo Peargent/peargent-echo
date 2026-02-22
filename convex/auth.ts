@@ -36,6 +36,10 @@ export const getOAuthUser = query({
       tokensProcessed: user.tokensProcessed ?? 0,
       searchesMade: user.searchesMade ?? 0,
       memoriesStored: user.memoriesStored ?? 0,
+      plan: user.plan ?? "free",
+      subscriptionStatus: user.subscriptionStatus,
+      extraMemories: user.extraMemories ?? 0,
+      extraSearches: user.extraSearches ?? 0,
     };
   },
 });
@@ -181,6 +185,10 @@ export const getCurrentUser = query({
       tokensProcessed: user.tokensProcessed ?? 0,
       searchesMade: user.searchesMade ?? 0,
       memoriesStored: user.memoriesStored ?? 0,
+      plan: user.plan ?? "free",
+      subscriptionStatus: user.subscriptionStatus,
+      extraMemories: user.extraMemories ?? 0,
+      extraSearches: user.extraSearches ?? 0,
     };
   },
 });

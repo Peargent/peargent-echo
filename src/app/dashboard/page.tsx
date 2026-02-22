@@ -7,24 +7,29 @@ import { api } from "@/lib/convex";
 import Link from "next/link";
 import { VercelAreaChart } from "@/components/dashboard/charts";
 import { PageLoader } from "@/components/ui/loading-spinner";
+import { isDevMode, DEV_USER, DEV_ANALYTICS, DEV_PLAN_LIMITS } from "@/lib/devMode";
 
 export default function DashboardPage() {
+    const devMode = isDevMode();
     const [token, setToken] = useState<string | null>(null);
     const { isAuthenticated: isOAuthAuthenticated } = useConvexAuth();
 
     useEffect(() => {
+        if (devMode) return;
         setToken(localStorage.getItem("peargent_echo_token"));
-    }, []);
+    }, [devMode]);
 
     // Get user from either auth method
-    const emailPasswordUser = useQuery(api.auth.getCurrentUser, token ? { token } : "skip");
-    const oauthUser = useQuery(api.auth.getOAuthUser, isOAuthAuthenticated ? {} : "skip");
-    const user = token ? emailPasswordUser : oauthUser;
+    const emailPasswordUser = useQuery(api.auth.getCurrentUser, !devMode && token ? { token } : "skip");
+    const oauthUser = useQuery(api.auth.getOAuthUser, !devMode && isOAuthAuthenticated ? {} : "skip");
+    const user = devMode ? DEV_USER : (token ? emailPasswordUser : oauthUser);
 
-    const analytics = useQuery(api.analytics.getDashboardStats, user ? { days: 365 } : "skip");
+    const analyticsQuery = useQuery(api.analytics.getDashboardStats, !devMode && user ? { days: 365 } : "skip");
+    const analytics = devMode ? DEV_ANALYTICS : analyticsQuery;
 
     // Fetch plan limits
-    const planLimits = useQuery(api.users.getPlanLimits, user ? { userId: user._id } : "skip");
+    const planLimitsQuery = useQuery(api.users.getPlanLimits, !devMode && user ? { userId: user._id } : "skip");
+    const planLimits = devMode ? DEV_PLAN_LIMITS : planLimitsQuery;
 
     const memoryLimit = planLimits?.limits.memories ?? 1000;
     const searchLimit = planLimits?.limits.searches ?? 1000;

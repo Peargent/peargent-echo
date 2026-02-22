@@ -2,17 +2,23 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { checkout, customerPortal } from "./dodo";
 
-// Plan configuration
-export const PLANS = {
-  free: { memories: 100, searches: 100, price: 0 },
+// Plan configuration — limits for memories & searches (retrievals)
+export const PLANS: Record<string, { memories: number; searches: number; price: number }> = {
+  free: { memories: 1000, searches: 1000, price: 0 },
   pro: { memories: 5000, searches: 5000, price: 9 },
-  enterprise: { memories: Infinity, searches: Infinity, price: 0 }, // Custom pricing
+  pro_plus: { memories: 10000, searches: 10000, price: 19 },
 };
 
-// Create checkout session for Pro plan
+// Map Dodo product IDs → plan names (set in Convex env vars)
+export const PRODUCT_TO_PLAN: Record<string, string> = {
+  [process.env.DODO_PRO_PRODUCT_ID || ""]: "pro",
+  [process.env.DODO_PRO_PLUS_PRODUCT_ID || ""]: "pro_plus",
+};
+
+// Create checkout session for a subscription plan
 export const createCheckoutSession = action({
   args: {
-    productId: v.string(), // Dodo product ID for Pro plan
+    productId: v.string(), // Dodo product ID for the plan
     returnUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -54,5 +60,3 @@ export const openCustomerPortal = action({
     return { url: result.portal_url };
   },
 });
-
-

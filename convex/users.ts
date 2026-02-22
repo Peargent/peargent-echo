@@ -84,10 +84,10 @@ export const getPlanLimits = query({
     const plan = user.plan || "free";
     
     // Plan limits
-    const limits = {
-      free: { memories: 100, searches: 100 },
+    const limits: Record<string, { memories: number; searches: number }> = {
+      free: { memories: 1000, searches: 1000 },
       pro: { memories: 5000, searches: 5000 },
-      enterprise: { memories: Infinity, searches: Infinity },
+      pro_plus: { memories: 10000, searches: 10000 },
     };
     
     const baseLimits = limits[plan as keyof typeof limits] || limits.free;

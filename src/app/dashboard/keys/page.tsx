@@ -6,8 +6,10 @@ import { useConvexAuth } from "convex/react";
 import { api } from "@/lib/convex";
 import type { Id } from "@/lib/convex";
 import { PageLoader } from "@/components/ui/loading-spinner";
+import { isDevMode, DEV_USER, DEV_API_KEYS } from "@/lib/devMode";
 
 export default function APIKeysPage() {
+    const devMode = isDevMode();
     const [token, setToken] = useState<string | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newKeyName, setNewKeyName] = useState("");
@@ -16,19 +18,24 @@ export default function APIKeysPage() {
     const [keyToRevoke, setKeyToRevoke] = useState<Id<"apiKeys"> | null>(null);
     const { isAuthenticated: isOAuthAuthenticated } = useConvexAuth();
 
+    // Local dev mode keys state
+    const [devKeys, setDevKeys] = useState(DEV_API_KEYS);
+
     useEffect(() => {
+        if (devMode) return;
         setToken(localStorage.getItem("peargent_echo_token"));
-    }, []);
+    }, [devMode]);
 
     // Get user from either auth method
-    const emailPasswordUser = useQuery(api.auth.getCurrentUser, token ? { token } : "skip");
-    const oauthUser = useQuery(api.auth.getOAuthUser, isOAuthAuthenticated ? {} : "skip");
-    const user = token ? emailPasswordUser : oauthUser;
+    const emailPasswordUser = useQuery(api.auth.getCurrentUser, !devMode && token ? { token } : "skip");
+    const oauthUser = useQuery(api.auth.getOAuthUser, !devMode && isOAuthAuthenticated ? {} : "skip");
+    const user = devMode ? DEV_USER : (token ? emailPasswordUser : oauthUser);
 
-    const apiKeys = useQuery(
+    const apiKeysQuery = useQuery(
         api.keys.listApiKeys,
-        user ? { userId: user._id } : "skip"
+        !devMode && user ? { userId: user._id } : "skip"
     );
+    const apiKeys = devMode ? devKeys : apiKeysQuery;
     const generateAndCreateApiKey = useAction(api.keys.generateAndCreateApiKey);
     const revokeApiKeyMutation = useMutation(api.keys.revokeApiKey);
 
@@ -36,6 +43,22 @@ export default function APIKeysPage() {
         if (!user || !newKeyName.trim()) return;
 
         setIsCreating(true);
+        if (devMode) {
+            // Simulate key creation in dev mode
+            const mockKey = `echo_sk_dev_${Math.random().toString(36).slice(2, 14)}`;
+            setDevKeys(prev => [...prev, {
+                _id: `key_${Date.now()}` as any,
+                name: newKeyName.trim(),
+                keyPrefix: mockKey.slice(0, 12),
+                permissions: ["read", "write", "delete"],
+                createdAt: Date.now(),
+                lastUsedAt: null,
+            }]);
+            setCreatedKey(mockKey);
+            setNewKeyName("");
+            setIsCreating(false);
+            return;
+        }
         try {
             const result = await generateAndCreateApiKey({
                 userId: user._id,
@@ -44,7 +67,6 @@ export default function APIKeysPage() {
             });
             setCreatedKey(result.key);
             setNewKeyName("");
-            // setShowCreateModal(false); // Keep modal open to show key
         } catch (error) {
             console.error("Failed to create key:", error);
         } finally {
@@ -59,6 +81,11 @@ export default function APIKeysPage() {
     const confirmRevoke = async () => {
         if (!user || !keyToRevoke) return;
 
+        if (devMode) {
+            setDevKeys(prev => prev.filter(k => k._id !== keyToRevoke));
+            setKeyToRevoke(null);
+            return;
+        }
         try {
             await revokeApiKeyMutation({ keyId: keyToRevoke, userId: user._id });
             setKeyToRevoke(null);

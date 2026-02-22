@@ -9,58 +9,63 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/lib/convex";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PageLoader } from "@/components/ui/loading-spinner";
+import { isDevMode, DEV_USER, DEV_PLAN_LIMITS } from "@/lib/devMode";
 
 export default function DashboardLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    const devMode = isDevMode();
     const router = useRouter();
     const pathname = usePathname();
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [starCount, setStarCount] = useState<number | null>(null);
 
-    // OAuth auth state
+    // OAuth auth state (skip hooks still called but unused in dev mode)
     const { isAuthenticated: isOAuthAuthenticated, isLoading: oauthLoading } = useConvexAuth();
     const { signOut: oauthSignOut } = useAuthActions();
 
     useEffect(() => {
+        if (devMode) { setIsLoading(false); return; }
         const savedToken = localStorage.getItem("peargent_echo_token");
         setToken(savedToken);
         setIsLoading(false);
-    }, []);
+    }, [devMode]);
 
     // For email/password users, get user from token
-    const emailPasswordUser = useQuery(api.auth.getCurrentUser, token ? { token } : "skip");
+    const emailPasswordUser = useQuery(api.auth.getCurrentUser, !devMode && token ? { token } : "skip");
 
     // For OAuth users, get current user from session
-    const oauthUser = useQuery(api.auth.getOAuthUser, isOAuthAuthenticated ? {} : "skip");
+    const oauthUser = useQuery(api.auth.getOAuthUser, !devMode && isOAuthAuthenticated ? {} : "skip");
 
     const signOutWithToken = useMutation(api.auth.signOutWithToken);
 
     // Determine which user to use
-    const user = token ? emailPasswordUser : oauthUser;
+    const user = devMode ? DEV_USER : (token ? emailPasswordUser : oauthUser);
     const hasToken = !!token;
     const hasOAuth = isOAuthAuthenticated;
-    const isAuthLoading = isLoading || oauthLoading || (hasToken && emailPasswordUser === undefined) || (hasOAuth && !hasToken && oauthUser === undefined);
+    const isAuthLoading = devMode ? false : (isLoading || oauthLoading || (hasToken && emailPasswordUser === undefined) || (hasOAuth && !hasToken && oauthUser === undefined));
 
     // PREFETCH DATA FOR SEAMLESS NAVIGATION
     // 1. Analytics (365 days)
-    useQuery(api.analytics.getDashboardStats, user ? { days: 365 } : "skip");
+    useQuery(api.analytics.getDashboardStats, !devMode && user ? { days: 365 } : "skip");
 
     // 2. Memories (Limit 50)
-    useQuery(api.memories.listMemories, user ? { userId: user._id, limit: 50 } : "skip");
+    useQuery(api.memories.listMemories, !devMode && user ? { userId: user._id, limit: 50 } : "skip");
 
     // Fetch plan limits
-    const planLimits = useQuery(api.users.getPlanLimits, user ? { userId: user._id } : "skip");
+    const planLimitsQuery = useQuery(api.users.getPlanLimits, !devMode && user ? { userId: user._id } : "skip");
+    const planLimits = devMode ? DEV_PLAN_LIMITS : planLimitsQuery;
 
     // Redirect to login if not authenticated
     useEffect(() => {
+        if (devMode) return;
         if (!isLoading && !oauthLoading && !hasToken && !hasOAuth) {
             router.push("/login");
         }
-    }, [isLoading, oauthLoading, hasToken, hasOAuth, router]);
+    }, [devMode, isLoading, oauthLoading, hasToken, hasOAuth, router]);
 
     // Fetch GitHub stars
     useEffect(() => {
@@ -75,11 +80,13 @@ export default function DashboardLayout({
     }, []);
 
     const handleSignOut = async () => {
-        if (token) {
-            await signOutWithToken({ token });
+        // Clear token-based session (email/password auth, including dev mode)
+        const storedToken = localStorage.getItem("peargent_echo_token");
+        if (storedToken) {
+            try { await signOutWithToken({ token: storedToken }); } catch { }
             localStorage.removeItem("peargent_echo_token");
         }
-        if (isOAuthAuthenticated) {
+        if (!devMode && isOAuthAuthenticated) {
             await oauthSignOut();
         }
         router.push("/login");
@@ -167,8 +174,40 @@ export default function DashboardLayout({
                     </div>
                 </nav>
 
-                {/* Bottom Section - Detailed Usage & Profile */}
+                {/* Bottom Section - Plan Badge, Usage & Profile */}
                 <div className="mt-auto px-6 pb-4 space-y-4">
+                    {/* Plan Badge */}
+                    <div className="flex items-center justify-between">
+                        <Link href="/dashboard/billing" className="group flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest border transition-colors ${(user.plan === "pro" || user.plan === "pro_plus")
+                                ? "border-[#4ade80]/30 text-[#4ade80] bg-[#4ade80]/[0.05]"
+                                : "border-foreground/10 text-foreground-muted bg-foreground/[0.02]"
+                                }`}>
+                                {user.plan === "pro_plus" ? "Pro+" : user.plan === "pro" ? "Pro" : "Free"}
+                            </span>
+                            {user.subscriptionStatus === "active" && (
+                                <span className="flex items-center gap-1 text-[10px] text-[#4ade80]">
+                                    <span className="w-1.5 h-1.5 bg-[#4ade80] rounded-full animate-pulse" />
+                                    Active
+                                </span>
+                            )}
+                            {user.subscriptionStatus === "on_hold" && (
+                                <span className="flex items-center gap-1 text-[10px] text-amber-400">
+                                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                                    On Hold
+                                </span>
+                            )}
+                        </Link>
+                        {(!user.plan || user.plan === "free") && (
+                            <Link
+                                href="/dashboard/billing"
+                                className="text-[10px] font-medium text-foreground-muted hover:text-foreground uppercase tracking-wider transition-colors"
+                            >
+                                Upgrade →
+                            </Link>
+                        )}
+                    </div>
+
                     {/* Usage Section */}
                     {planLimits && (
                         <div className="space-y-3">
@@ -231,11 +270,17 @@ export default function DashboardLayout({
 
             {/* Main content */}
             <main className="flex-1 overflow-auto bg-background relative z-0">
+                {devMode && (
+                    <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2 text-center text-xs font-bold uppercase tracking-widest text-amber-500 z-50 relative">
+                        ⚡ Dev Mode — Using Mock Data
+                    </div>
+                )}
                 <a
                     href="https://github.com/peargent/peargent"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="absolute top-6 right-8 flex items-center gap-2 px-4 py-2 bg-black hover:bg-black/90 border border-white/10 rounded-none transition-all group z-50 text-[11px] font-medium tracking-wide uppercase text-white no-underline shadow-lg"
+                    style={devMode ? { top: '3.5rem' } : {}}
                 >
                     <div className="flex items-center gap-1.5">
                         <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24" aria-hidden="true">

@@ -5,26 +5,30 @@ import { useQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/lib/convex";
 import { PageLoader } from "@/components/ui/loading-spinner";
+import { isDevMode, DEV_USER, DEV_MEMORIES } from "@/lib/devMode";
 
 export default function MemoriesPage() {
+    const devMode = isDevMode();
     const [token, setToken] = useState<string | null>(null);
     // const [searchQuery, setSearchQuery] = useState("");
     // const [isSearching, setIsSearching] = useState(false);
     const { isAuthenticated: isOAuthAuthenticated } = useConvexAuth();
 
     useEffect(() => {
+        if (devMode) return;
         setToken(localStorage.getItem("peargent_echo_token"));
-    }, []);
+    }, [devMode]);
 
     // Get user from either auth method
-    const emailPasswordUser = useQuery(api.auth.getCurrentUser, token ? { token } : "skip");
-    const oauthUser = useQuery(api.auth.getOAuthUser, isOAuthAuthenticated ? {} : "skip");
-    const user = token ? emailPasswordUser : oauthUser;
+    const emailPasswordUser = useQuery(api.auth.getCurrentUser, !devMode && token ? { token } : "skip");
+    const oauthUser = useQuery(api.auth.getOAuthUser, !devMode && isOAuthAuthenticated ? {} : "skip");
+    const user = devMode ? DEV_USER : (token ? emailPasswordUser : oauthUser);
 
-    const memories = useQuery(
+    const memoriesQuery = useQuery(
         api.memories.listMemories,
-        user ? { userId: user._id, limit: 50 } : "skip"
+        !devMode && user ? { userId: user._id, limit: 50 } : "skip"
     );
+    const memories = devMode ? DEV_MEMORIES : memoriesQuery;
 
     if (!user) {
         return <PageLoader />;

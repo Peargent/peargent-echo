@@ -19,7 +19,7 @@ export default defineSchema({
     memoriesStored: v.optional(v.number()),
     createdAt: v.optional(v.number()),
     // Billing fields
-    plan: v.optional(v.string()), // "free" | "pro" | "enterprise"
+    plan: v.optional(v.string()), // "free" | "pro" | "pro_plus"
     dodoCustomerId: v.optional(v.string()),
     subscriptionStatus: v.optional(v.string()), // "active" | "cancelled" | "on_hold"
     subscriptionId: v.optional(v.string()),

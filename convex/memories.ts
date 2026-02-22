@@ -9,6 +9,7 @@ import {
   analyzeMemoryIntegration
 } from "./lib/embeddings";
 import { Doc, Id } from "./_generated/dataModel";
+import { PLANS } from "./payments";
 
 const SIMILARITY_THRESHOLD = 0.65; // For duplicate/update detection
 
@@ -47,16 +48,17 @@ export const addMemory = action({
     updateProfile: v.optional(v.boolean()), // Whether to update user profile
   },
   handler: async (ctx, args): Promise<AddMemoryResult> => {
-    const MEMORY_LIMIT = 1000;
-
-    // Check memory limit
-    const canAdd = await ctx.runQuery(internal.memories.checkMemoryLimit, {
+    // Check dynamic plan-based memory limit
+    const planCheck = await ctx.runQuery(internal.memories.getUserPlanLimit, {
       userId: args.userId,
-      limit: MEMORY_LIMIT,
     });
 
-    if (!canAdd) {
-      throw new Error(`Memory limit reached (${MEMORY_LIMIT}). Please upgrade to add more memories.`);
+    if (!planCheck) {
+      throw new Error("User not found");
+    }
+
+    if ((planCheck.currentMemories) >= planCheck.memoryLimit) {
+      throw new Error(`Memory limit reached (${planCheck.memoryLimit}). Please upgrade to add more memories.`);
     }
 
     // Smart filtering (if enabled)
@@ -285,15 +287,17 @@ export const searchMemories = action({
     includeGraph: v.optional(v.boolean()), // Whether to include related memories
   },
   handler: async (ctx, args): Promise<SearchResult[]> => {
-    // Check search limit
-    const SEARCH_LIMIT = 1000;
-    const canSearch = await ctx.runQuery(internal.memories.checkSearchLimit, {
+    // Check dynamic plan-based search limit
+    const planCheck = await ctx.runQuery(internal.memories.getUserPlanLimit, {
       userId: args.userId,
-      limit: SEARCH_LIMIT,
     });
 
-    if (!canSearch) {
-      throw new Error(`Search limit reached (${SEARCH_LIMIT}). Please upgrade to search more.`);
+    if (!planCheck) {
+      throw new Error("User not found");
+    }
+
+    if ((planCheck.currentSearches) >= planCheck.searchLimit) {
+      throw new Error(`Search limit reached (${planCheck.searchLimit}). Please upgrade to search more.`);
     }
 
 
@@ -775,6 +779,30 @@ function calculateRecencyScore(createdAt: number): number {
   const ageHours = ageMs / (1000 * 60 * 60);
   return Math.exp(-ageHours / 24);
 }
+
+// Get user's dynamic plan limits (used by addMemory and searchMemories)
+export const getUserPlanLimit = internalQuery({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+
+    const plan = user.plan || "free";
+    const planConfig = PLANS[plan] || PLANS.free;
+    const extraMemories = user.extraMemories || 0;
+    const extraSearches = user.extraSearches || 0;
+
+    return {
+      memoryLimit: planConfig.memories + extraMemories,
+      searchLimit: planConfig.searches + extraSearches,
+      currentMemories: user.memoriesStored ?? 0,
+      currentSearches: user.searchesMade ?? 0,
+      plan,
+    };
+  },
+});
 
 export const checkMemoryLimit = internalQuery({
   args: {
